@@ -1,659 +1,588 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Soothing Sensory River Installation</title>
-    
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
-
+    <title>Gentle Playroom - Sensory Magic</title>
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            background: #05070c;
-            font-family: system-ui, -apple-system, sans-serif;
-            overflow: hidden;
-            width: 100vw;
-            height: 100vh;
-            display: flex;
-        }
-        #app-container {
-            position: relative;
-            flex-grow: 1;
-            height: 100vh;
-        }
-        /* Full-screen embedded ambient camera tracking layer */
-        #webcam {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            z-index: 1;
-            opacity: 0.15; /* Default soft visual blend */
-            pointer-events: none;
-        }
-        .mirror-view {
-            transform: scaleX(-1);
-        }
-        /* Main Interactive Graphics Render View */
-        #output_canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 2;
-        }
+        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
+        canvas { display: block; position: absolute; top: 0; left: 0; z-index: 1; }
+        #webcam { transform: scaleX(-1); display: none; }
         
-        /* --- 🎛️ Dashboard Control Panel Sidebar --- */
-        #control-panel {
-            position: absolute;
-            top: 0;
-            right: 0;
-            width: 340px;
-            height: 100%;
-            background: rgba(11, 17, 32, 0.96);
-            backdrop-filter: blur(15px);
-            border-left: 1px solid rgba(255,255,255,0.08);
-            padding: 25px;
-            color: #f1f5f9;
-            box-shadow: -10px 0 40px rgba(0,0,0,0.6);
-            transform: translateX(100%);
-            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-            z-index: 50;
-            overflow-y: auto;
+        #ui {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            background: #ffffff; z-index: 100; color: #333; text-align: center;
         }
-        #control-panel.open { transform: translateX(0); }
-        .toggle-btn {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            background: #0284c7;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 30px;
-            font-weight: bold;
-            cursor: pointer;
-            box-shadow: 0 4px 20px rgba(2, 132, 199, 0.3);
-            z-index: 60;
-            transition: all 0.2s ease;
+        button {
+            padding: 20px 50px; font-size: 20px; cursor: pointer; letter-spacing: 1px;
+            background-color: #3498db; color: white; border: none; border-radius: 50px;
+            box-shadow: 0 4px 10px rgba(52, 152, 219, 0.3); transition: 0.3s;
         }
-        .toggle-btn:hover { background: #0ea5e9; }
+        button:hover { background-color: #2980b9; transform: scale(1.05); }
+        #log { margin-top: 20px; font-family: monospace; color: #888; }
         
-        h3 { margin-bottom: 20px; color: #38bdf8; font-size: 18px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; }
-        .setting-group { margin-bottom: 22px; }
-        label { display: block; font-size: 11px; font-weight: 700; color: #94a3b8; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
-        .slider-container { display: flex; align-items: center; gap: 12px; }
-        input[type="range"] { flex-grow: 1; accent-color: #38bdf8; background: #1e293b; height: 6px; border-radius: 3px; appearance: none; }
-        select { width: 100%; background: #1e293b; color: white; border: 1px solid #334155; padding: 8px 12px; border-radius: 8px; font-size: 14px; outline: none; }
-        .val-display { font-family: monospace; font-size: 13px; color: #38bdf8; width: 45px; text-align: right; }
-        
-        .switch { position: relative; display: inline-block; width: 46px; height: 24px; }
-        .switch input { opacity: 0; width: 0; height: 0; }
-        .slider-box { position: absolute; cursor: pointer; inset: 0; background-color: #1e293b; transition: .3s; border-radius: 24px; }
-        .slider-box:before { position: absolute; content: ""; height: 16px; width: 16px; left: 4px; bottom: 4px; background-color: white; transition: .3s; border-radius: 50%; }
-        input:checked + .slider-box { background-color: #0ea5e9; }
-        input:checked + .slider-box:before { transform: translateX(22px); }
-
-        #ui-score {
-            position: absolute;
-            top: 25px;
-            left: 25px;
-            background: rgba(15, 23, 42, 0.75);
-            backdrop-filter: blur(8px);
-            padding: 10px 22px;
-            border-radius: 30px;
-            font-size: 15px;
-            font-weight: 600;
-            color: #e2e8f0;
-            border: 1px solid rgba(255,255,255,0.1);
-            z-index: 30;
-            pointer-events: none;
-        }
-
-        #loading {
-            position: absolute;
-            inset: 0;
-            background: #0b1120;
-            color: #94a3b8;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            font-size: 18px;
-            z-index: 100;
-            transition: opacity 0.6s ease;
-            pointer-events: none;
-        }
-        .spinner { border: 3px solid rgba(255,255,255,0.05); width: 45px; height: 45px; border-radius: 50%; border-left-color: #0ea5e9; animation: spin 1.2s linear infinite; margin-bottom: 15px; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .dg.ac { z-index: 50 !important; transition: opacity 0.3s; }
+        body.fullscreen .dg.ac { opacity: 0; pointer-events: none; }
+        body.fullscreen #ui { display: none !important; }
     </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.9/dat.gui.min.js"></script>
 </head>
 <body>
-
-    <div id="loading">
-        <div class="spinner"></div>
-        <div>Crafting a Calming Sensory World...</div>
+    <div id="ui">
+        <h1 style="letter-spacing: 2px; font-weight: 300;">GENTLE PLAYROOM</h1>
+        <p style="color: #666; margin-bottom: 30px;">Interact with a world of gentle magic.</p>
+        <button onclick="startApp()">START EXPERIENCE</button>
+        <div id="log">Sensors Calibrated</div>
     </div>
 
-    <div id="app-container">
-        <video id="webcam" autoplay playsinline class="mirror-view"></video>
-        <canvas id="output_canvas"></canvas>
-        
-        <div id="ui-score">🗑️ River Cleaned: <span id="score-val">0</span></div>
-        <button class="toggle-btn" onclick="toggleSettings()">⚙️ Adjust Setup</button>
-        
-        <div id="control-panel">
-            <h3>Exhibit Controller</h3>
-            
-            <div class="setting-group">
-                <label>Mirror View Movement</label>
-                <label class="switch">
-                    <input type="checkbox" id="param-mirror" checked onchange="updateParameters()">
-                    <span class="slider-box"></span>
-                </label>
-            </div>
-
-            <div class="setting-group">
-                <label>Webcam Background Blend</label>
-                <div class="slider-container">
-                    <input type="range" id="param-cam-opac" min="0" max="0.5" step="0.01" value="0.15" oninput="updateParameters()">
-                    <span class="val-display" id="val-cam-opac">15%</span>
-                </div>
-            </div>
-
-            <div class="setting-group">
-                <label>Tracking Overlay Style</label>
-                <select id="param-style" onchange="updateParameters()">
-                    <option value="dots" selected>Calming Glowing Circles</option>
-                    <option value="skeleton">Skeletal Vector Lines</option>
-                    <option value="none">Hidden / Invisible Tracker</option>
-                </select>
-            </div>
-
-            <div class="setting-group">
-                <label>Sky Height (Top %)</label>
-                <div class="slider-container">
-                    <input type="range" id="param-sky" min="0.15" max="0.4" step="0.01" value="0.30" oninput="updateParameters()">
-                    <span class="val-display" id="val-sky">30%</span>
-                </div>
-            </div>
-
-            <div class="setting-group">
-                <label>River Level (Bottom %)</label>
-                <div class="slider-container">
-                    <input type="range" id="param-water" min="0.55" max="0.85" step="0.01" value="0.68" oninput="updateParameters()">
-                    <span class="val-display" id="val-water">68%</span>
-                </div>
-            </div>
-            
-            <div class="setting-group">
-                <label>Interaction Distance</label>
-                <div class="slider-container">
-                    <input type="range" id="param-radius" min="60" max="250" step="10" value="130" oninput="updateParameters()">
-                    <span class="val-display" id="val-radius">130px</span>
-                </div>
-            </div>
-        </div>
-    </div>
+    <canvas id="gameCanvas"></canvas>
+    <video id="webcam" playsinline autoplay muted></video>
 
     <script>
-        const videoElement = document.getElementById('webcam');
-        const canvasElement = document.getElementById('output_canvas');
-        const canvasCtx = canvasElement.getContext('2d');
-        const scoreVal = document.getElementById('score-val');
-        const loadingScreen = document.getElementById('loading');
-        
-        let animationTime = 0;
-        let trashCleanedCount = 0;
-        let activeTrackers = [];
-        let rawLandmarks = null;
-        
-        // Entity Pools
-        let fishArray = [];
-        let trashArray = [];
-        let padArray = [];
-        let particleArray = [];
+        var log = document.getElementById('log');
+        var video = document.getElementById('webcam');
+        var canvas = document.getElementById('gameCanvas');
+        var ctx = canvas.getContext('2d');
 
-        // Smooth Sun Scaling Parameters
-        let sunScale = 1.0;
-        let sunRingTimer = 0;
+        var objects = [], motionPoints = [], popExplosions = [], ripples = [], splashes = []; 
+        var lastFrame = null, engineBooted = false;
+        var activeInteractionMode = 'Launch'; 
+        var modeNotification = { text: '', life: 0 }; 
 
-        let CONFIG = {
-            mirror: true,
-            bgOpacity: 0.15,
-            trackerStyle: 'dots',
-            skyLineY: 0.30,
-            landLineY: 0.68,
-            touchRadius: 130,
-            padCount: 4
+        var audioCtx;
+        var pentatonicScale = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33]; 
+
+        var magicMeter = 0;
+        var displayMagicMeter = 0; // NEW: Used for smooth visual transitioning of the thermometer
+        var magicEventActive = false;
+        var magicEventTimer = 0;
+        var confetti = [];
+        var sonicRings = []; 
+
+        var bxcmHues = [280, 30, 190, 90, 330];
+
+        var settings = {
+            interactionMode: 'Random', 
+            objectCount: 15, 
+            floorLevel: 0.95,       
+            magicFillSpeed: 1.0,    
+            soundEnabled: true,     
+            gravity: 0.2, 
+            kickPower: 8,
+            bgColor: '#f9f9fb', 
+            cameraAlpha: 0.2, 
+            cameraBlur: 4,
+            indicatorColor: '#ffffff', 
+            indicatorSize: 30,
+            puddleSize: 120 
         };
 
-        function toggleSettings() {
-            document.getElementById('control-panel').classList.toggle('open');
+        function initAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
         }
 
-        function updateParameters() {
-            CONFIG.mirror = document.getElementById('param-mirror').checked;
-            CONFIG.bgOpacity = parseFloat(document.getElementById('param-cam-opac').value);
-            CONFIG.trackerStyle = document.getElementById('param-style').value;
-            CONFIG.skyLineY = parseFloat(document.getElementById('param-sky').value);
-            CONFIG.landLineY = parseFloat(document.getElementById('param-water').value);
-            CONFIG.touchRadius = parseInt(document.getElementById('param-radius').value);
-
-            document.getElementById('val-cam-opac').innerText = Math.round(CONFIG.bgOpacity * 100) + "%";
-            document.getElementById('val-sky').innerText = Math.round(CONFIG.skyLineY * 100) + "%";
-            document.getElementById('val-water').innerText = Math.round(CONFIG.landLineY * 100) + "%";
-            document.getElementById('val-radius').innerText = CONFIG.touchRadius + "px";
-
-            // Apply blend styling to ambient camera layer directly
-            videoElement.style.opacity = CONFIG.bgOpacity;
-            if(CONFIG.mirror) videoElement.classList.add('mirror-view');
-            else videoElement.classList.remove('mirror-view');
+        function playChime() {
+            if (!settings.soundEnabled || !audioCtx) return; 
+            var freq = pentatonicScale[Math.floor(Math.random() * pentatonicScale.length)];
+            var osc = audioCtx.createOscillator();
+            var gainNode = audioCtx.createGain();
             
-            fishArray.forEach(f => f.resetY());
-            trashArray.forEach(t => t.resetY());
-            padArray.forEach(p => p.y = window.innerHeight - 35);
-        }
-
-        // =================================================================
-        // 🐠 GRAPHICS ENGINE DESIGN INFUSED WITH SENSORY MODALITIES
-        // =================================================================
-        
-        class LilyPad {
-            constructor(index, total) {
-                this.x = (window.innerWidth / (total + 1)) * (index + 1);
-                this.y = window.innerHeight - 35; 
-                this.radiusX = 75;
-                this.radiusY = 24;
-                // Soft, non-glaring unique sensory colors
-                const colors = ['#818cf8', '#2dd4bf', '#34d399', '#fb923c'];
-                this.color = colors[index % colors.length];
-                this.glow = 0;
-                this.squish = 1.0;
-            }
-            update(trackers) {
-                this.glow = lerp(this.glow, 0, 0.05);
-                this.squish = lerp(this.squish, 1.0, 0.08);
-                
-                trackers.forEach(t => {
-                    if(t.y > window.innerHeight * CONFIG.landLineY) {
-                        if(Math.hypot(this.x - t.x, this.y - t.y) < CONFIG.touchRadius) {
-                            if(this.glow < 0.1) {
-                                // Soothing slow-fading expansion rings
-                                for(let r=0; r<2; r++) particleArray.push(new Particle(this.x, this.y, this.color, 'ring', 1.5));
-                                this.squish = 0.65;
-                            }
-                            this.glow = 1.0;
-                        }
-                    }
-                });
-            }
-            draw() {
-                canvasCtx.save();
-                canvasCtx.globalAlpha = 0.85;
-                canvasCtx.shadowBlur = this.glow * 25;
-                canvasCtx.shadowColor = this.color;
-                canvasCtx.fillStyle = this.color;
-                
-                canvasCtx.beginPath();
-                canvasCtx.ellipse(this.x, this.y, this.radiusX * (2.0 - this.squish), this.radiusY * this.squish, 0, 0, Math.PI * 1.8);
-                canvasCtx.lineTo(this.x, this.y);
-                canvasCtx.fill();
-                canvasCtx.restore();
-            }
-        }
-
-        class Fish {
-            constructor(typeIndex) {
-                this.x = Math.random() * window.innerWidth;
-                this.resetY();
-                this.size = 30 + Math.random() * 12;
-                this.speedX = (Math.random() > 0.5 ? 1 : -1) * (0.8 + Math.random() * 0.8); // Lower velocities
-                this.typeIndex = typeIndex % 3;
-                this.wiggle = Math.random() * 10;
-                
-                // Diversified soothing types
-                if(this.typeIndex === 0) { this.color = '#38bdf8'; this.typeStr = 'trout'; }
-                else if(this.typeIndex === 1) { this.color = '#facc15'; this.typeStr = 'goldfish'; }
-                else { this.color = '#e2e8f0'; this.typeStr = 'minnow'; }
-            }
-            resetY() {
-                let waterTop = window.innerHeight * CONFIG.landLineY;
-                this.y = waterTop + 40 + Math.random() * (window.innerHeight - waterTop - 90);
-            }
-            update(trackers) {
-                this.wiggle += 0.12; // Slow organic wiggle rate
-                this.x += this.speedX;
-                if (this.x < -100 || this.x > window.innerWidth + 100) this.speedX *= -1;
-
-                trackers.forEach(t => {
-                    if(t.y > window.innerHeight * CONFIG.landLineY) {
-                        let dist = Math.hypot(this.x - t.x, this.y - t.y);
-                        if(dist < CONFIG.touchRadius) {
-                            // Turn around smoothly rather than popping away abruptly
-                            this.speedX = lerp(this.speedX, Math.sign(this.x - t.x) * 2.5, 0.05);
-                            if(Math.random() > 0.94) particleArray.push(new Particle(this.x, this.y, 'rgba(255,255,255,0.25)', 'dot'));
-                        }
-                    }
-                });
-            }
-            draw() {
-                canvasCtx.save();
-                canvasCtx.translate(this.x, this.y);
-                if (this.speedX < 0) canvasCtx.scale(-1, 1);
-
-                canvasCtx.fillStyle = this.color;
-                canvasCtx.beginPath();
-                let tail = Math.sin(this.wiggle) * 5;
-
-                if(this.typeStr === 'goldfish') {
-                    // Fan tail model anatomy
-                    canvasCtx.moveTo(this.size, 0);
-                    canvasCtx.quadraticCurveTo(0, -this.size * 0.7, -this.size * 0.4, tail);
-                    canvasCtx.lineTo(-this.size, tail - 15);
-                    canvasCtx.lineTo(-this.size * 0.6, tail);
-                    canvasCtx.lineTo(-this.size, tail + 15);
-                    canvasCtx.quadraticCurveTo(0, this.size * 0.7, this.size, 0);
-                } else {
-                    // Sleek streamlined minnow/trout profile
-                    canvasCtx.moveTo(this.size, 0);
-                    canvasCtx.quadraticCurveTo(0, -this.size * 0.4, -this.size, tail);
-                    canvasCtx.lineTo(-this.size - 12, tail - 10);
-                    canvasCtx.lineTo(-this.size - 12, tail + 10);
-                    canvasCtx.quadraticCurveTo(0, this.size * 0.4, this.size, 0);
-                }
-                canvasCtx.fill();
-                canvasCtx.restore();
-            }
-        }
-
-        class Trash {
-            constructor() {
-                this.x = Math.random() * window.innerWidth;
-                this.resetY();
-                this.size = 20;
-                this.speedX = 0.4 + Math.random() * 0.4;
-                this.rotation = Math.random() * Math.PI;
-                this.isVacuumed = false;
-                this.type = Math.random() > 0.5 ? 'bottle' : 'can';
-            }
-            resetY() {
-                let waterTop = window.innerHeight * CONFIG.landLineY;
-                this.y = waterTop + 30 + Math.random() * (window.innerHeight - waterTop - 90);
-            }
-            update(trackers) {
-                if (!this.isVacuumed) {
-                    this.x += this.speedX;
-                    this.rotation += 0.005;
-                    if (this.x > window.innerWidth + 50) this.x = -50;
-                }
-
-                trackers.forEach(t => {
-                    if (t.y > window.innerHeight * CONFIG.landLineY) {
-                        let dist = Math.hypot(this.x - t.x, this.y - t.y);
-                        if (dist < CONFIG.touchRadius) {
-                            this.isVacuumed = true;
-                            // Smooth interpolation instead of snapping dramatically
-                            this.x = lerp(this.x, t.x, 0.15);
-                            this.y = lerp(this.y, t.y, 0.15);
-
-                            if (dist < 25) {
-                                for (let p = 0; p < 8; p++) particleArray.push(new Particle(this.x, this.y, '#34d399', 'dot', 0.8));
-                                trashCleanedCount++;
-                                scoreVal.innerText = trashCleanedCount;
-                                let idx = trashArray.indexOf(this);
-                                if(idx !== -1) trashArray[idx] = new Trash();
-                            }
-                        }
-                    }
-                });
-            }
-            draw() {
-                canvasCtx.save();
-                canvasCtx.globalAlpha = 0.5; // Soft translucent styling to reduce visual clutter
-                canvasCtx.translate(this.x, this.y);
-                canvasCtx.rotate(this.rotation);
-                canvasCtx.strokeStyle = 'rgba(255,255,255,0.4)';
-                canvasCtx.lineWidth = 2;
-                if(this.type === 'bottle') {
-                    canvasCtx.strokeRect(-8, -18, 16, 36);
-                    canvasCtx.strokeRect(-4, -24, 8, 6);
-                } else {
-                    canvasCtx.strokeRect(-10, -14, 20, 28);
-                }
-                canvasCtx.restore();
-            }
-        }
-
-        class Particle {
-            constructor(x, y, color, type = 'dot', speedScale = 1.0) {
-                this.x = x; this.y = y; this.color = color; this.type = type;
-                this.size = type === 'ring' ? 5 : 2 + Math.random() * 4;
-                this.vx = (Math.random() - 0.5) * 3 * speedScale;
-                this.vy = (Math.random() - 0.5) * 3 * speedScale;
-                this.alpha = 1.0;
-            }
-            update() {
-                if(this.type === 'ring') {
-                    this.size += 2.2; // Gentle outward ripple scaling speed
-                    this.alpha -= 0.015;
-                } else {
-                    this.x += this.vx; this.y += this.vy;
-                    this.alpha -= 0.015;
-                }
-            }
-            draw() {
-                canvasCtx.save();
-                canvasCtx.globalAlpha = this.alpha;
-                canvasCtx.beginPath();
-                if(this.type === 'ring') {
-                    canvasCtx.strokeStyle = this.color;
-                    canvasCtx.lineWidth = 3;
-                    canvasCtx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-                    canvasCtx.stroke();
-                } else {
-                    canvasCtx.fillStyle = this.color;
-                    canvasCtx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-                    canvasCtx.fill();
-                }
-                canvasCtx.restore();
-            }
-        }
-
-        // =================================================================
-        // 🗺️ 3-TIER ECO BACKGROUND SCENE PRODUCER
-        // =================================================================
-        
-        function drawSceneTiers(trackers) {
-            let w = canvasElement.width;
-            let h = canvasElement.height;
-            let skyLimit = h * CONFIG.skyLineY;
-            let landLimit = h * CONFIG.landLineY;
-
-            // 🌤️ 1. Sky Tier
-            let skyGrad = canvasCtx.createLinearGradient(0, 0, 0, skyLimit);
-            skyGrad.addColorStop(0, '#0f172a'); skyGrad.addColorStop(1, '#1e293b'); // Dark soothing twilight
-            canvasCtx.fillStyle = skyGrad; canvasCtx.fillRect(0, 0, w, skyLimit);
-
-            // ☀️ Soothing Radiant Sun (Golden Yellow Rings Engine)
-            let sunX = w * 0.5, sunY = h * 0.12, sunBaseRad = 45;
-            let isNearSun = false;
+            osc.type = 'sine'; 
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
             
-            trackers.forEach(t => {
-                if(t.y < skyLimit) {
-                    if(Math.hypot(t.x - sunX, t.y - sunY) < 140) isNearSun = true;
-                }
+            gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+            gainNode.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + 0.05); 
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.5); 
+            
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            osc.start();
+            osc.stop(audioCtx.currentTime + 1.5);
+        }
+
+        function addMagic(amount) {
+            if (magicEventActive) return; 
+            magicMeter += amount * settings.magicFillSpeed; 
+            if (magicMeter >= 100) triggerMagicEvent();
+        }
+
+        function triggerMagicEvent() {
+            magicMeter = 100;
+            magicEventActive = true;
+            magicEventTimer = 400; // Increased duration for a slower, gentler event
+            sonicRings = [];
+            confetti = [];
+            
+            // Spawn just ONE very soft initial ring
+            createSonicRing(10);
+        }
+
+        // NEW: Gentle Sonic Rings
+        function createSonicRing(startRadius = 10) {
+            sonicRings.push({
+                x: canvas.width / 2, y: canvas.height / 2,
+                radius: startRadius,
+                color: `hsl(${Math.random() * 360}, 60%, 75%)`, // Softer pastel colors
+                thickness: Math.random() * 15 + 10,
+                life: 1.0
             });
-
-            if(isNearSun) {
-                sunScale = lerp(sunScale, 1.2, 0.05);
-                sunRingTimer++;
-                if(sunRingTimer % 35 === 0) { // Soft cyclic intervals
-                    particleArray.push(new Particle(sunX, sunY, '#facc15', 'ring', 0.5));
-                }
-            } else {
-                sunScale = lerp(sunScale, 1.0, 0.05);
-            }
-
-            canvasCtx.save();
-            canvasCtx.translate(sunX, sunY);
-            canvasCtx.scale(sunScale, sunScale);
-            canvasCtx.fillStyle = '#eab308';
-            canvasCtx.beginPath(); canvasCtx.arc(0, 0, sunBaseRad, 0, Math.PI*2); canvasCtx.fill();
-            
-            // Minimal serene face
-            canvasCtx.fillStyle = '#1e293b'; canvasCtx.beginPath();
-            canvasCtx.arc(-12, -6, 4, 0, Math.PI*2); canvasCtx.arc(14, -6, 4, 0, Math.PI*2); canvasCtx.fill();
-            canvasCtx.strokeStyle = '#1e293b'; canvasCtx.lineWidth = 3; canvasCtx.lineCap = 'round';
-            canvasCtx.beginPath(); canvasCtx.arc(0, 4, 10, 0, Math.PI); canvasCtx.stroke();
-            canvasCtx.restore();
-
-            // 🪵 2. Land Tier (Middle Third)
-            let landGrad = canvasCtx.createLinearGradient(0, skyLimit, 0, landLimit);
-            landGrad.addColorStop(0, '#064e3b'); landGrad.addColorStop(1, '#022c22'); // Forest deep green tones
-            canvasCtx.fillStyle = landGrad; canvasCtx.fillRect(0, skyLimit, w, landLimit - skyLimit);
-
-            // 🌊 3. Water Tier (Lower Third)
-            let waterGrad = canvasCtx.createLinearGradient(0, landLimit, 0, h);
-            waterGrad.addColorStop(0, 'rgba(12, 74, 110, 0.85)'); waterGrad.addColorStop(1, 'rgba(3, 41, 63, 0.95)');
-            canvasCtx.fillStyle = waterGrad; canvasCtx.fillRect(0, landLimit, w, h - landLimit);
-
-            // Gentle moving wave lines
-            animationTime += 0.015;
-            canvasCtx.fillStyle = 'rgba(14, 165, 233, 0.15)';
-            canvasCtx.beginPath(); canvasCtx.moveTo(0, landLimit);
-            for(let x=0; x<=w; x+=30) canvasCtx.lineTo(x, landLimit + Math.sin(x*0.01 + animationTime * 1.5)*5);
-            canvasCtx.lineTo(w, h); canvasCtx.lineTo(0, h); canvasCtx.fill();
         }
 
-        // =================================================================
-        // 🦴 SYSTEM SKELETAL INTERACTION LOGIC
-        // =================================================================
-        
-        function onPoseEngineResults(results) {
-            let w = canvasElement.width;
-            let h = canvasElement.height;
-            activeTrackers = [];
-            rawLandmarks = results.poseLandmarks;
-
-            canvasCtx.clearRect(0, 0, w, h);
-            canvasCtx.save();
-            
-            // Coordinate transformation matching configuration
-            if(CONFIG.mirror) {
-                canvasCtx.translate(w, 0); canvasCtx.scale(-1, 1);
-            }
-
-            if (rawLandmarks) {
-                loadingScreen.style.opacity = 0;
-                
-                // Mapped Targets: Wrists(15,16), Index Fingers(19,20), Feet/Ankles(27,28,31,32)
-                const boneIndices = [15, 16, 19, 20, 27, 28, 31, 32];
-                boneIndices.forEach(idx => {
-                    let mark = rawLandmarks[idx];
-                    if(mark && mark.visibility > 0.55) {
-                        let calcX = CONFIG.mirror ? (mark.x * w) : (w - (mark.x * w));
-                        activeTrackers.push({ x: calcX, y: mark.y * h, type: idx });
+        function startApp() {
+            log.innerText = "Initializing sensory sensors...";
+            initAudio(); 
+            navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+                video.srcObject = stream;
+                video.play().catch(()=>{});
+                var checkInterval = setInterval(() => {
+                    if (video.videoWidth > 0 && !engineBooted) {
+                        clearInterval(checkInterval);
+                        engineBooted = true;
+                        document.getElementById('ui').style.display = 'none';
+                        initGame();
                     }
-                });
+                }, 100);
+            }).catch(err => { log.innerText = "Error: " + err.name; });
+        }
+
+        function initGame() {
+            try {
+                var gui = new dat.GUI();
+                
+                var mainFolder = gui.addFolder('Main Gameplay');
+                mainFolder.add(settings, 'interactionMode', ['Launch', 'Pop', 'Random']).name('Ball Mode');
+                mainFolder.add(settings, 'objectCount', 5, 40).name('Total Objects').onFinishChange(resetObjects);
+                mainFolder.add(settings, 'floorLevel', 0.5, 1.0).name('Floor Height');
+                mainFolder.add(settings, 'soundEnabled').name('Sound ON/OFF');
+                mainFolder.open();
+
+                var magicFolder = gui.addFolder('Magic & Physics');
+                magicFolder.add(settings, 'magicFillSpeed', 0.1, 5.0).name('Fill Speed');
+                magicFolder.add(settings, 'gravity', 0.05, 0.5).name('Gravity');
+                magicFolder.add(settings, 'kickPower', 2, 20).name('Impact Force');
+                
+                var envFolder = gui.addFolder('Environment');
+                envFolder.addColor(settings, 'bgColor').name('Room Hue');
+                envFolder.add(settings, 'puddleSize', 50, 300).name('Puddle Base Size');
+
+                var mirrorFolder = gui.addFolder('Camera Mirror');
+                mirrorFolder.add(settings, 'cameraAlpha', 0, 1).name('Visibility');
+                mirrorFolder.add(settings, 'cameraBlur', 0, 20).name('Softness');
+                
+                var touchFolder = gui.addFolder('Touch Points');
+                touchFolder.addColor(settings, 'indicatorColor').name('Color');
+                touchFolder.add(settings, 'indicatorSize', 5, 60).name('Size');
+            } catch(e) {}
+
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+            document.addEventListener('fullscreenchange', () => {
+                if (document.fullscreenElement) document.body.classList.add('fullscreen');
+                else document.body.classList.remove('fullscreen');
+            });
+            
+            setInterval(cycleInteractionMode, 20000); 
+            showModeChangeNotification(settings.interactionMode === 'Random' ? 'Launch' : settings.interactionMode); 
+
+            resetObjects();
+            trackMotion();
+            gameLoop();
+        }
+
+        function cycleInteractionMode() { 
+            if (settings.interactionMode === 'Random') {
+                activeInteractionMode = (activeInteractionMode === 'Launch') ? 'Pop' : 'Launch';
+                showModeChangeNotification(activeInteractionMode);
+            }
+        }
+        
+        function showModeChangeNotification(mode) { 
+            modeNotification.text = `Ball Mode: ${mode}`;
+            modeNotification.life = 1.0;
+        }
+
+        function trackMotion() {
+            var mCanvas = document.createElement('canvas');
+            var mCtx = mCanvas.getContext('2d', { willReadFrequently: true });
+            mCanvas.width = 64; mCanvas.height = 48;
+
+            function scan() {
+                if (video.readyState < 3) { setTimeout(scan, 100); return; }
+                mCtx.drawImage(video, 0, 0, 64, 48);
+                var current = mCtx.getImageData(0, 0, 64, 48).data;
+                
+                let rawMotion = [];
+                motionPoints = []; 
+
+                if (lastFrame) {
+                    for (var i = 0; i < current.length; i += 4) {
+                        if (Math.abs(current[i] - lastFrame[i]) > 45) {
+                            var x = (1.0 - (((i/4) % 64) / 64)) * canvas.width;
+                            var yPerc = (Math.floor(i/4/64))/48;
+                            var y = yPerc * canvas.height;
+                            rawMotion.push({ x: x, y: y });
+                        }
+                    }
+                    
+                    if (rawMotion.length > 0) {
+                        let topPt = rawMotion[0], bottomPt = rawMotion[0];
+                        let leftPt = rawMotion[0], rightPt = rawMotion[0];
+                        
+                        rawMotion.forEach(p => {
+                            if (p.y < topPt.y) topPt = p;       
+                            if (p.y > bottomPt.y) bottomPt = p; 
+                            if (p.x < leftPt.x) leftPt = p;     
+                            if (p.x > rightPt.x) rightPt = p;   
+                        });
+                        
+                        motionPoints.push(topPt, bottomPt, leftPt, rightPt);
+
+                        motionPoints.forEach(pt => {
+                            objects.forEach((obj, index) => {
+                                if (!obj) return;
+                                var dx = obj.x - pt.x, dy = obj.y - pt.y;
+                                
+                                if (Math.sqrt(dx*dx + dy*dy) < (obj.radius || settings.indicatorSize) + 30) {
+                                    switch(obj.type) {
+                                        case 'ball':
+                                            if (activeInteractionMode === 'Launch') {
+                                                obj.vy = -settings.kickPower;
+                                                obj.vx = (obj.x - pt.x) * 0.15;
+                                                addMagic(2); 
+                                            } else { 
+                                                createPopExplosion(obj.x, obj.y, obj.colorHue);
+                                                objects[index] = createObject();
+                                                addMagic(5); 
+                                            }
+                                            break;
+                                        case 'leaf':
+                                            obj.vy = -settings.kickPower * 0.5;
+                                            obj.vx += (obj.x - pt.x) * 0.1;
+                                            addMagic(1); 
+                                            break;
+                                        case 'puddle':
+                                            if (obj.cooldown <= 0) {
+                                                obj.colorHue = Math.floor(Math.random() * 360); 
+                                                obj.isColorful = true;
+                                                ripples.push({x: obj.x, y: obj.y, radius: 20, life: 1.0, hue: obj.colorHue});
+                                                createSplash(obj.x, obj.y, obj.colorHue);
+                                                playChime(); 
+                                                addMagic(4); 
+                                                obj.cooldown = 30; 
+                                            }
+                                            break;
+                                    }
+                                }
+                            });
+                        });
+                    }
+                }
+                
+                objects.forEach(obj => { if (obj && obj.type === 'puddle' && obj.cooldown > 0) obj.cooldown--; });
+
+                lastFrame = new Uint8ClampedArray(current);
+                setTimeout(scan, 60);
+            }
+            scan();
+        }
+
+        function gameLoop() {
+            requestAnimationFrame(gameLoop);
+            
+            if (settings.interactionMode !== 'Random' && activeInteractionMode !== settings.interactionMode) {
+                 activeInteractionMode = settings.interactionMode;
+                 showModeChangeNotification(activeInteractionMode);
             }
 
-            // Render Layers
-            drawSceneTiers(activeTrackers);
+            ctx.fillStyle = settings.bgColor;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Update System Pool Loops
-            padArray.forEach(p => { p.update(activeTrackers); p.draw(); });
-            fishArray.forEach(f => { f.update(activeTrackers); f.draw(); });
-            trashArray.forEach(t => { t.update(activeTrackers); t.draw(); });
-            
-            particleArray.forEach((part, index) => {
-                part.update(); part.draw();
-                if(part.alpha <= 0) particleArray.splice(index, 1);
-            });
+            drawMirroredCamera();
 
-            // --- 🦴 DYNAMIC OVERLAY DESIGN ENGINE STYLE TOGGLES ---
-            if(CONFIG.trackerStyle !== 'none' && rawLandmarks) {
-                canvasCtx.save();
+            if (magicEventActive) {
+                // Gentle, warm ambient glow instead of flashing white
+                ctx.save();
+                ctx.globalAlpha = Math.min((magicEventTimer / 400) * 0.15, 0.15); // Very subtle
+                ctx.fillStyle = '#FFFAF0'; 
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.restore();
+            }
+
+            drawTouchIndicators();
+            drawMagicMeter(); 
+            drawAndUpdateObjects(); 
+            drawAndUpdatePops();
+            drawAndUpdateSplashes(); 
+            drawAndUpdateRipples(); 
+
+            if (magicEventActive) {
+                // Very gentle ring spawning (every 80 frames instead of 25)
+                if (magicEventTimer % 80 === 0 && magicEventTimer > 100) createSonicRing();
                 
-                if(CONFIG.trackerStyle === 'skeleton') {
-                    // Draw interconnected calming soft-blue bone tracking vectors
-                    canvasCtx.strokeStyle = 'rgba(56, 189, 248, 0.4)';
-                    canvasCtx.lineWidth = 5;
-                    canvasCtx.lineCap = 'round';
-                    
-                    const connections = [
-                        [11, 12], [11, 13], [13, 15], [12, 14], [14, 16], // Upper torso body
-                        [11, 23], [12, 24], [23, 24], [23, 25], [24, 26], [25, 27], [26, 28] // Lower base limbs
-                    ];
-                    
-                    connections.forEach(([i1, i2]) => {
-                        let p1 = rawLandmarks[i1], p2 = rawLandmarks[i2];
-                        if(p1 && p2 && p1.visibility > 0.5 && p2.visibility > 0.5) {
-                            let x1 = CONFIG.mirror ? (p1.x * w) : (w - (p1.x * w));
-                            let x2 = CONFIG.mirror ? (p2.x * w) : (w - (p2.x * w));
-                            canvasCtx.beginPath();
-                            canvasCtx.moveTo(x1, p1.y * h);
-                            canvasCtx.lineTo(x2, p2.y * h);
-                            canvasCtx.stroke();
-                        }
+                // Continuous, gentle spawning of soft magic dust (confetti)
+                if (magicEventTimer > 100 && confetti.length < 80 && Math.random() > 0.5) {
+                    confetti.push({
+                        x: Math.random() * canvas.width, y: -20, 
+                        vx: Math.sin(magicEventTimer * 0.05) * 2, // Gentle horizontal sway
+                        vy: Math.random() * 1.5 + 1.0,            // Slow drifting fall
+                        color: Math.random() > 0.5 ? '#FFFACD' : '#FFE4B5', // Pastel golds
+                        size: Math.random() * 6 + 4, rotation: Math.random() * Math.PI * 2, rs: (Math.random() - 0.5) * 0.05,
+                        opacity: 0 // Starts invisible and fades in
                     });
                 }
-
-                // Render Active Tracking Target Markers (Circles Mode)
-                activeTrackers.forEach(t => {
-                    let isSky = t.y < h * CONFIG.landLineY;
-                    canvasCtx.save();
-                    canvasCtx.shadowBlur = 12;
-                    canvasCtx.shadowColor = isSky ? '#facc15' : '#38bdf8';
-                    canvasCtx.fillStyle = '#ffffff'; // Professional crisp white core center
-                    canvasCtx.beginPath();
-                    canvasCtx.arc(t.x, t.y, 8, 0, Math.PI * 2);
-                    canvasCtx.fill();
-                    canvasCtx.restore();
-                });
-
-                canvasCtx.restore();
+                
+                drawAndUpdateSonicRings();
+                drawAndUpdateConfetti();
+                
+                magicEventTimer--;
+                if (magicEventTimer <= 0) {
+                    magicEventActive = false;
+                    magicMeter = 0; 
+                }
             }
 
-            canvasCtx.restore();
+            drawNotifications();
         }
 
-        function lerp(start, end, amt) { return (1 - amt) * start + amt * end; }
+        // --- UPDATED: Smooth & Clear Thermometer ---
+        function drawMagicMeter() {
+            var barWidth = 30;
+            var barHeight = canvas.height * 0.5;
+            var x = 40; 
+            var y = (canvas.height / 2) - (barHeight / 2);
 
-        function initEcosystemPools() {
-            canvasElement.width = window.innerWidth;
-            canvasElement.height = window.innerHeight;
+            // Interpolate the visual level towards the actual meter value (Smooth glide)
+            displayMagicMeter += (magicMeter - displayMagicMeter) * 0.05;
+
+            // 1. Draw the clear "Empty" background container
+            ctx.fillStyle = 'rgba(40, 40, 40, 0.4)'; // Dark translucent track
+            ctx.fillRect(x, y, barWidth, barHeight);
+
+            // 2. Draw the liquid fill
+            var fillHeight = (displayMagicMeter / 100) * barHeight;
+            var fillY = y + barHeight - fillHeight;
+
+            var grad = ctx.createLinearGradient(x, y + barHeight, x, y);
+            grad.addColorStop(0, '#ff4444');    
+            grad.addColorStop(0.5, '#ffeb3b');  
+            grad.addColorStop(1, '#00C851');    
+
+            ctx.save();
+            ctx.fillStyle = grad;
+            ctx.fillRect(x, fillY, barWidth, fillHeight);
+            ctx.restore();
+
+            // 3. Draw the crisp white boundary lines (shows top and bottom limits clearly)
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(x, y, barWidth, barHeight);
+        }
+
+        // --- UPDATED: Gentle Sonic Rings ---
+        function drawAndUpdateSonicRings() {
+            for (let i = sonicRings.length - 1; i >= 0; i--) {
+                let r = sonicRings[i];
+                r.radius += 3; // EXPANDS VERY SLOWLY NOW
+                r.life -= 0.005; // FADES VERY SLOWLY NOW
+                
+                if (r.life <= 0) {
+                    sonicRings.splice(i, 1);
+                } else {
+                    ctx.save();
+                    ctx.globalAlpha = r.life * 0.5; // Max opacity is only 50% so it's not jarring
+                    ctx.strokeStyle = r.color;
+                    ctx.lineWidth = r.thickness;
+                    ctx.beginPath();
+                    ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            }
+        }
+
+        // --- UPDATED: Gentle Confetti / Magic Dust ---
+        function drawAndUpdateConfetti() {
+             for (let i = 0; i < confetti.length; i++) {
+                let c = confetti[i];
+                c.x += c.vx; c.y += c.vy; c.rotation += c.rs;
+                
+                // Fade in gently
+                if (c.opacity < 1.0 && magicEventTimer > 60) {
+                    c.opacity += 0.05;
+                }
+                // Fade out at the end of the event
+                if (magicEventTimer <= 60) {
+                    c.opacity = Math.max(0, magicEventTimer / 60);
+                }
+
+                ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.rotation);
+                ctx.globalAlpha = c.opacity; 
+                ctx.fillStyle = c.color; ctx.fillRect(-c.size/2, -c.size/2, c.size, c.size * 0.6); ctx.restore();
+                if (c.x < 0) c.x = canvas.width; if (c.x > canvas.width) c.x = 0;
+            }
+        }
+
+        function drawAndUpdateObjects() {
+             var floorY = canvas.height * settings.floorLevel; 
+             objects.forEach((obj, i) => {
+                if (!obj) return;
+                
+                switch(obj.type) {
+                    case 'ball': updateBall(obj, floorY); break;
+                    case 'leaf': updateLeaf(obj, floorY); break;
+                    case 'puddle': updatePuddle(obj, floorY); break;
+                }
+
+                ctx.save();
+                switch(obj.type) {
+                    case 'ball': drawBall(obj, floorY); break;
+                    case 'leaf': drawLeaf(obj, floorY); break;
+                    case 'puddle': drawPuddle(obj, floorY); break;
+                }
+                ctx.restore();
+
+                if (obj.y > canvas.height + 50) {
+                    objects[i] = createObject();
+                }
+            });
+        }
+        
+        function updateBall(o, floorY) {
+            o.vy += settings.gravity; o.x += o.vx; o.y += o.vy; o.vx *= 0.94; o.vy *= 0.94;
+            if (o.y + o.radius > floorY) { o.y = floorY - o.radius; o.vy *= -0.4; }
+        }
+        function drawBall(o, floorY) {
+            ctx.fillStyle = 'rgba(0,0,0,0.06)'; ctx.beginPath(); ctx.ellipse(o.x, floorY, o.radius, o.radius * 0.2, 0, 0, 2*Math.PI); ctx.fill();
+            var grd = ctx.createRadialGradient(o.x-o.radius*0.3, o.y-o.radius*0.3, o.radius*0.1, o.x, o.y, o.radius);
+            grd.addColorStop(0, `hsl(${o.colorHue}, 80%, 85%)`); grd.addColorStop(1, `hsl(${o.colorHue}, 70%, 40%)`);
+            ctx.beginPath(); ctx.arc(o.x, o.y, o.radius, 0, 2*Math.PI); ctx.fillStyle = grd; ctx.fill();
+        }
+
+        function updateLeaf(o, floorY) {
+            o.vy += settings.gravity * 0.2; o.vx += (Math.random() - 0.5) * 0.2; o.x += o.vx; o.y += o.vy;
+            o.vx *= 0.96; o.vy *= 0.98; o.rotation += o.rotationSpeed;
+            if (o.y + o.radius > floorY) { o.y = floorY - o.radius; o.vy = 0; o.vx *= 0.8; }
+        }
+        function drawLeaf(o, floorY) {
+            ctx.translate(o.x, o.y); ctx.rotate(o.rotation); ctx.fillStyle = `hsl(${o.colorHue}, 70%, 55%)`; 
+            ctx.beginPath(); ctx.moveTo(0, -o.radius); ctx.quadraticCurveTo(o.radius, 0, 0, o.radius);
+            ctx.quadraticCurveTo(-o.radius, 0, 0, -o.radius); ctx.fill();
+        }
+
+        function updatePuddle(o, floorY) { o.y = floorY; }
+        function drawPuddle(o, floorY) {
+            let fillStyle = o.isColorful ? `hsla(${o.colorHue}, 80%, 60%, 0.4)` : 'rgba(100, 180, 255, 0.3)';
+            ctx.fillStyle = fillStyle; ctx.beginPath(); ctx.ellipse(o.x, o.y, o.radius, o.radius * 0.3, 0, 0, 2 * Math.PI); ctx.fill();
+        }
+
+        function drawAndUpdateRipples() {
+            for (let i = ripples.length - 1; i >= 0; i--) {
+                let r = ripples[i]; r.radius += 2.0; r.life -= 0.02;
+                if (r.life <= 0) ripples.splice(i, 1);
+                else { ctx.strokeStyle = `hsla(${r.hue}, 80%, 60%, ${r.life})`; ctx.lineWidth = 4; ctx.beginPath(); ctx.ellipse(r.x, r.y, r.radius, r.radius * 0.3, 0, 0, 2 * Math.PI); ctx.stroke(); }
+            }
+        }
+        
+        function createSplash(x, y, hue) {
+            var numSplashes = Math.floor(Math.random() * 15) + 5; 
+            for (let i = 0; i < numSplashes; i++) {
+                var angle = -Math.PI/2 + (Math.random() - 0.5) * 1.5, speed = Math.random() * 8 + 3; 
+                splashes.push({ x: x, y: y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: 1.0, hue: hue, size: Math.random() * 4 + 2 });
+            }
+        }
+        
+        function drawAndUpdateSplashes() {
+            for (let i = splashes.length - 1; i >= 0; i--) {
+                let s = splashes[i]; s.x += s.vx; s.y += s.vy; s.vy += settings.gravity * 0.8; s.life -= 0.03;
+                if (s.life <= 0) splashes.splice(i, 1);
+                else { ctx.fillStyle = `hsla(${s.hue}, 80%, 60%, ${s.life})`; ctx.beginPath(); ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2); ctx.fill(); }
+            }
+        }
+
+        function resetObjects() {
+            objects = [];
+            for (var i = 0; i < settings.objectCount; i++) objects.push(createObject());
+        }
+
+        function createObject() {
+            var floorY = canvas.height * settings.floorLevel; 
+            var objectType = ['ball', 'leaf', 'puddle'][Math.floor(Math.random() * 3)];
             
-            fishArray = []; trashArray = []; padArray = [];
-            for(let i=0; i<5; i++) fishArray.push(new Fish(i));
-            for(let i=0; i<4; i++) trashArray.push(new Trash());
-            for(let i=0; i<CONFIG.padCount; i++) padArray.push(new LilyPad(i, CONFIG.padCount));
+            let newObj = {
+                type: objectType, x: Math.random() * canvas.width,
+                y: Math.random() * floorY * 0.8, vx: (Math.random() - 0.5) * 2, vy: (Math.random() - 0.5) * 2,
+                radius: Math.random() * 20 + 30, cooldown: 0 
+            };
+
+            switch(objectType) {
+                case 'ball':
+                    newObj.colorHue = Math.floor(Math.random() * 360);
+                    break;
+                case 'leaf':
+                    newObj.colorHue = bxcmHues[Math.floor(Math.random() * bxcmHues.length)];
+                    newObj.rotation = Math.random() * Math.PI * 2;
+                    newObj.rotationSpeed = (Math.random() - 0.5) * 0.04;
+                    break;
+                case 'puddle':
+                    newObj.y = floorY; 
+                    newObj.radius = Math.random() * 40 + settings.puddleSize; 
+                    newObj.isColorful = false; 
+                    newObj.colorHue = 210; 
+                    break;
+            }
+            return newObj;
         }
 
-        // Initialize MediaPipe Lifecycle Hook configurations
-        const pose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
-        pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
-        pose.onResults(onPoseEngineResults);
-
-        const camera = new Camera(videoElement, {
-            onFrame: async () => { await pose.send({ image: videoElement }); },
-            width: 640, height: 480
+        function drawMirroredCamera() { 
+            ctx.save(); ctx.globalAlpha = settings.cameraAlpha; ctx.filter = `blur(${settings.cameraBlur}px)`;
+            ctx.scale(-1, 1); ctx.translate(-canvas.width, 0);
+            if (video.readyState >= 3) ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            ctx.restore();
+        }
+        
+        function drawTouchIndicators() { 
+            motionPoints.forEach(p => {
+                var grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, settings.indicatorSize * 1.5);
+                grad.addColorStop(0, settings.indicatorColor + '66'); grad.addColorStop(1, settings.indicatorColor + '00');
+                ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(p.x, p.y, settings.indicatorSize * 1.5, 0, 2*Math.PI); ctx.fill();
+            });
+        }
+        
+        function createPopExplosion(x, y, hue) { 
+            var numParticles = 30;
+            for (let i = 0; i < numParticles; i++) {
+                var angle = (i/numParticles) * 2 * Math.PI, speed = Math.random() * settings.kickPower * 0.5 + 1;
+                popExplosions.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: 1.0, hue, lightness: 70 + Math.random() * 20 });
+            }
+        }
+        
+        function drawAndUpdatePops() { 
+            for (let i = popExplosions.length - 1; i >= 0; i--) {
+                let p = popExplosions[i]; p.x += p.vx; p.y += p.vy; p.vy += settings.gravity * 0.5; p.life -= 0.03;
+                if (p.life <= 0) popExplosions.splice(i, 1);
+                else { ctx.fillStyle = `hsla(${p.hue}, 80%, ${p.lightness}%, ${p.life})`; ctx.fillRect(p.x, p.y, 4, 4); }
+            }
+        }
+        
+        function drawNotifications() { 
+             if (document.fullscreenElement) return; 
+             if (modeNotification.life > 0) {
+                modeNotification.life -= 0.01; ctx.save(); ctx.globalAlpha = Math.min(1, modeNotification.life * 3); 
+                ctx.fillStyle = '#333333'; ctx.font = 'bold 30px sans-serif'; ctx.textAlign = 'center';
+                ctx.fillText(modeNotification.text, canvas.width / 2, 50); ctx.restore();
+            }
+        }
+        
+        function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+        
+        document.addEventListener('keydown', e => { 
+            if (e.key.toLowerCase() === 'f') {
+                if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+                else document.exitFullscreen();
+            }
         });
-
-        // Prompt client for internal media capture stream to map full-screen background canvas tracking
-        navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
-            videoElement.srcObject = stream;
-        });
-
-        window.addEventListener('resize', () => { initEcosystemPools(); updateParameters(); });
-
-        initEcosystemPools();
-        camera.start();
     </script>
 </body>
 </html>
