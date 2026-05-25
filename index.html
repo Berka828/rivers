@@ -3,17 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Skeletal Pose Interactive Ecosystem</title>
+    <title>Magical 3-Tier Interactive River Ecosystem</title>
     
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
 
     <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             background: #090d16;
             font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
@@ -28,22 +24,41 @@
             height: 100vh;
             background: #0284c7;
         }
-        video {
+        /* The actual tracking video hidden in background */
+        #webcam {
             position: absolute;
             width: 1px;
             height: 1px;
             opacity: 0;
             pointer-events: none;
         }
-        canvas {
+        /* Interactive Display Canvas */
+        #output_canvas {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
         }
+        /* --- 📹 Customizable Live Webcam Mirror Monitor --- */
+        #webcam-monitor {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 200px;
+            height: 150px;
+            border-radius: 12px;
+            border: 3px solid rgba(255, 255, 255, 0.8);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+            object-fit: cover;
+            z-index: 40;
+            background: #000;
+        }
+        .mirror-mode {
+            transform: scaleX(-1);
+        }
         
-        /* --- 🎛️ Control Panel Sidebar Design --- */
+        /* --- 🎛️ Dashboard Control Panel Sidebar --- */
         #control-panel {
             position: absolute;
             top: 0;
@@ -51,7 +66,7 @@
             width: 340px;
             height: 100%;
             background: rgba(15, 23, 42, 0.95);
-            backdrop-filter: blur(10px);
+            backdrop-filter: blur(12px);
             border-left: 1px solid rgba(255,255,255,0.1);
             padding: 25px;
             color: #f8fafc;
@@ -61,9 +76,7 @@
             z-index: 50;
             overflow-y: auto;
         }
-        #control-panel.open {
-            transform: translateX(0);
-        }
+        #control-panel.open { transform: translateX(0); }
         .toggle-btn {
             position: absolute;
             top: 20px;
@@ -81,20 +94,32 @@
         }
         .toggle-btn:hover { background: #0284c7; }
         
-        h3 { margin-bottom: 20px; color: #38bdf8; letter-spacing: 0.5px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;}
+        h3 { margin-bottom: 20px; color: #38bdf8; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;}
         .setting-group { margin-bottom: 22px; }
-        label { display: block; font-size: 13px; font-weight: 600; color: #94a3b8; margin-bottom: 8px; text-transform: uppercase;}
+        label { display: block; font-size: 12px; font-weight: 600; color: #94a3b8; margin-bottom: 8px; text-transform: uppercase;}
         .slider-container { display: flex; align-items: center; gap: 12px; }
         input[type="range"] { flex-grow: 1; accent-color: #38bdf8; background: #334155; height: 6px; border-radius: 3px; appearance: none; }
-        .val-display { font-family: monospace; font-size: 14px; color: #38bdf8; width: 45px; text-align: right; }
+        .val-display { font-family: monospace; font-size: 14px; color: #38bdf8; width: 50px; text-align: right; }
         
-        /* Styled Checkbox Toggle */
         .switch { position: relative; display: inline-block; width: 46px; height: 24px; }
         .switch input { opacity: 0; width: 0; height: 0; }
         .slider-box { position: absolute; cursor: pointer; inset: 0; background-color: #334155; transition: .3s; border-radius: 24px; }
         .slider-box:before { position: absolute; content: ""; height: 16px; width: 16px; left: 4px; bottom: 4px; background-color: white; transition: .3s; border-radius: 50%; }
         input:checked + .slider-box { background-color: #0ea5e9; }
         input:checked + .slider-box:before { transform: translateX(22px); }
+
+        #ui-score {
+            position: absolute;
+            top: 20px;
+            left: 240px;
+            background: rgba(255,255,255,0.95);
+            padding: 10px 20px;
+            border-radius: 30px;
+            font-weight: bold;
+            color: #0369a1;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            z-index: 30;
+        }
 
         #loading {
             position: absolute;
@@ -118,17 +143,21 @@
 
     <div id="loading">
         <div class="spinner"></div>
-        <div>Initializing Skeletal Tracking Engine... Stand in Frame</div>
+        <div>Generating Magic Ecosystem Pipeline... Stand back!</div>
     </div>
 
     <div id="app-container">
-        <button class="toggle-btn" onclick="toggleSettings()">⚙️ Settings Control</button>
+        <video id="webcam-monitor" autoplay playsinline class="mirror-mode"></video>
+        <video id="webcam" autoplay playsinline></video>
         
-        <div id="control-panel" class="wrapper">
-            <h3>Ecosystem Config</h3>
+        <div id="ui-score">🗑️ Trash Cleaned: <span id="score-val">0</span></div>
+        <button class="toggle-btn" onclick="toggleSettings()">⚙️ Settings</button>
+        
+        <div id="control-panel">
+            <h3>System Settings</h3>
             
             <div class="setting-group">
-                <label>Mirror Camera View</label>
+                <label>Mirror Interactive Scene</label>
                 <label class="switch">
                     <input type="checkbox" id="param-mirror" checked onchange="updateParameters()">
                     <span class="slider-box"></span>
@@ -136,7 +165,7 @@
             </div>
 
             <div class="setting-group">
-                <label>Sky Boundary (Top %)</label>
+                <label>Sky Height (Top %)</label>
                 <div class="slider-container">
                     <input type="range" id="param-sky" min="0.1" max="0.45" step="0.01" value="0.33" oninput="updateParameters()">
                     <span class="val-display" id="val-sky">33%</span>
@@ -144,54 +173,61 @@
             </div>
 
             <div class="setting-group">
-                <label>River Level (Bottom %)</label>
+                <label>Water Level (Bottom %)</label>
                 <div class="slider-container">
-                    <input type="range" id="param-water" min="0.55" max="0.9" step="0.01" value="0.66" oninput="updateParameters()">
+                    <input type="range" id="param-water" min="0.5" max="0.85" step="0.01" value="0.66" oninput="updateParameters()">
                     <span class="val-display" id="val-water">66%</span>
                 </div>
             </div>
 
             <div class="setting-group">
-                <label>Tracking Sensitivity</label>
+                <label>Sensor Size (Tracker Dots)</label>
                 <div class="slider-container">
-                    <input type="range" id="param-confidence" min="0.3" max="0.8" step="0.05" value="0.5" onchange="reinitMediaPipe()">
-                    <span class="val-display" id="val-confidence">0.5</span>
+                    <input type="range" id="param-dotsize" min="4" max="25" step="1" value="10" oninput="updateParameters()">
+                    <span class="val-display" id="val-dotsize">10px</span>
                 </div>
             </div>
             
             <div class="setting-group">
-                <label>Interaction Radius</label>
+                <label>Interaction Distance</label>
                 <div class="slider-container">
-                    <input type="range" id="param-radius" min="60" max="250" step="10" value="140" oninput="updateParameters()">
-                    <span class="val-display" id="val-radius">140px</span>
+                    <input type="range" id="param-radius" min="60" max="250" step="10" value="130" oninput="updateParameters()">
+                    <span class="val-display" id="val-radius">130px</span>
                 </div>
             </div>
         </div>
 
-        <video id="webcam" autoplay playsinline></video>
         <canvas id="output_canvas"></canvas>
     </div>
 
     <script>
         const videoElement = document.getElementById('webcam');
+        const monitorElement = document.getElementById('webcam-monitor');
         const canvasElement = document.getElementById('output_canvas');
         const canvasCtx = canvasElement.getContext('2d');
+        const scoreVal = document.getElementById('score-val');
         const loadingScreen = document.getElementById('loading');
         
         let animationTime = 0;
+        let trashCleanedCount = 0;
         let activeTrackers = [];
+        
+        // Entity Pools
         let fishArray = [];
+        let trashArray = [];
         let padArray = [];
+        let particleArray = [];
 
-        // =================================================================
-        // ⚙️ LIVE CUSTOMIZABLE ENGINE CONFIG
-        // =================================================================
+        // Global Interactive Variable Scaling
+        let sunScale = 1.0;
+        let isSunInteracting = false;
+
         let CONFIG = {
             mirror: true,
             skyLineY: 0.33,
             landLineY: 0.66,
-            touchRadius: 140,
-            confidence: 0.5,
+            touchRadius: 130,
+            dotSize: 10,
             padCount: 4
         };
 
@@ -199,52 +235,77 @@
             document.getElementById('control-panel').classList.toggle('open');
         }
 
-        // Catch parameter changes from UI inputs instantly
         function updateParameters() {
             CONFIG.mirror = document.getElementById('param-mirror').checked;
             CONFIG.skyLineY = parseFloat(document.getElementById('param-sky').value);
             CONFIG.landLineY = parseFloat(document.getElementById('param-water').value);
             CONFIG.touchRadius = parseInt(document.getElementById('param-radius').value);
+            CONFIG.dotSize = parseInt(document.getElementById('param-dotsize').value);
 
             document.getElementById('val-sky').innerText = Math.round(CONFIG.skyLineY * 100) + "%";
             document.getElementById('val-water').innerText = Math.round(CONFIG.landLineY * 100) + "%";
             document.getElementById('val-radius').innerText = CONFIG.touchRadius + "px";
+            document.getElementById('val-dotsize').innerText = CONFIG.dotSize + "px";
+
+            // Mirror webcam overlay container dynamically based on setup config
+            if(CONFIG.mirror) {
+                monitorElement.classList.add('mirror-mode');
+            } else {
+                monitorElement.classList.remove('mirror-mode');
+            }
             
-            // Recalculate entity layers safely inside water bounds
             fishArray.forEach(f => f.resetY());
-            padArray.forEach(p => p.y = window.innerHeight - 50);
+            trashArray.forEach(t => t.resetY());
+            padArray.forEach(p => p.y = window.innerHeight - 40);
         }
 
         // =================================================================
-        // 🐠 GRAPHICS ENTITIES MODEL PIPELINE
+        // 🎨 HIGH-FIDELITY DESIGN ASSET RENDERING CLASSES
         // =================================================================
+        
         class LilyPad {
             constructor(index, total) {
                 this.x = (window.innerWidth / (total + 1)) * (index + 1);
-                this.y = window.innerHeight - 50; 
-                this.radiusX = 65;
-                this.radiusY = 22;
-                const hues = [140, 290, 25, 200];
-                this.color = `hsl(${hues[index % hues.length]}, 85%, 55%)`;
+                this.y = window.innerHeight - 40; 
+                this.radiusX = 70;
+                this.radiusY = 24;
+                const hues = [145, 160, 135, 155];
+                this.color = `hsl(${hues[index % hues.length]}, 75%, 45%)`;
                 this.glow = 0;
             }
             update(trackers) {
-                this.glow = lerp(this.glow, 0, 0.07);
+                this.glow = lerp(this.glow, 0, 0.08);
                 trackers.forEach(t => {
-                    if(Math.hypot(this.x - t.x, this.y - t.y) < CONFIG.touchRadius) {
-                        this.glow = 1.0; // Touch feedback glow activation loop
+                    if(t.y > window.innerHeight * CONFIG.landLineY) {
+                        if(Math.hypot(this.x - t.x, this.y - t.y) < CONFIG.touchRadius) {
+                            if(this.glow < 0.2) {
+                                for(let r=0; r<2; r++) particleArray.push(new Particle(this.x, this.y, '#34d399', 'ring'));
+                            }
+                            this.glow = 1.0;
+                        }
                     }
                 });
             }
             draw() {
                 canvasCtx.save();
-                canvasCtx.shadowBlur = this.glow * 35;
-                canvasCtx.shadowColor = this.color;
+                canvasCtx.shadowBlur = this.glow * 30;
+                canvasCtx.shadowColor = '#6ee7b7';
+                
+                // Draw Natural Leaf Organic Contours
                 canvasCtx.fillStyle = this.color;
                 canvasCtx.beginPath();
-                canvasCtx.ellipse(this.x, this.y, this.radiusX * (1 + this.glow*0.2), this.radiusY * (1 - this.glow*0.3), 0, 0, Math.PI * 1.8);
+                canvasCtx.ellipse(this.x, this.y, this.radiusX * (1 + this.glow*0.15), this.radiusY * (1 - this.glow*0.2), 0, 0, Math.PI * 1.8);
                 canvasCtx.lineTo(this.x, this.y);
+                canvasCtx.closePath();
                 canvasCtx.fill();
+                
+                // Vein Lines
+                canvasCtx.strokeStyle = 'rgba(255,255,255,0.15)';
+                canvasCtx.lineWidth = 2;
+                canvasCtx.beginPath();
+                canvasCtx.moveTo(this.x, this.y); canvasCtx.lineTo(this.x - this.radiusX*0.5, this.y - 5);
+                canvasCtx.moveTo(this.x, this.y); canvasCtx.lineTo(this.x + this.radiusX*0.4, this.y + 5);
+                canvasCtx.stroke();
                 canvasCtx.restore();
             }
         }
@@ -254,23 +315,29 @@
                 this.x = Math.random() * window.innerWidth;
                 this.resetY();
                 this.size = 35 + Math.random() * 15;
-                this.speedX = (Math.random() > 0.5 ? 1 : -1) * (1.5 + Math.random() * 1.5);
-                this.color = `hsl(${190 + Math.random() * 30}, 90%, 60%)`;
-                this.wiggle = Math.random() * 5;
+                this.speedX = (Math.random() > 0.5 ? 1 : -1) * (1.5 + Math.random() * 2);
+                this.color = `hsl(${200 + Math.random() * 20}, 90%, 65%)`;
+                this.wiggle = Math.random() * 10;
+                this.isReacting = false;
             }
             resetY() {
-                let topBound = window.innerHeight * CONFIG.landLineY;
-                this.y = topBound + 30 + Math.random() * (window.innerHeight - topBound - 100);
+                let waterTop = window.innerHeight * CONFIG.landLineY;
+                this.y = waterTop + 40 + Math.random() * (window.innerHeight - waterTop - 100);
             }
             update(trackers) {
-                this.wiggle += 0.15;
+                this.wiggle += 0.2;
                 this.x += this.speedX;
                 if (this.x < -100 || this.x > window.innerWidth + 100) this.speedX *= -1;
 
-                // Simple collision handling check against hands or feet trackers
+                this.isReacting = false;
                 trackers.forEach(t => {
-                    if(Math.hypot(this.x - t.x, this.y - t.y) < CONFIG.touchRadius) {
-                        this.speedX = Math.sign(this.x - t.x) * 4; // Move away rapidly
+                    if(t.y > window.innerHeight * CONFIG.landLineY) {
+                        let dist = Math.hypot(this.x - t.x, this.y - t.y);
+                        if(dist < CONFIG.touchRadius) {
+                            this.isReacting = true;
+                            this.speedX = Math.sign(this.x - t.x) * 4.5; // Swim away fast
+                            if(Math.random() > 0.85) particleArray.push(new Particle(this.x, this.y, 'rgba(255,255,255,0.4)', 'bubble'));
+                        }
                     }
                 });
             }
@@ -278,97 +345,266 @@
                 canvasCtx.save();
                 canvasCtx.translate(this.x, this.y);
                 if (this.speedX < 0) canvasCtx.scale(-1, 1);
-                canvasCtx.fillStyle = this.color;
+
+                // Beautiful Vector Fish Body Gradient
+                let gradient = canvasCtx.createLinearGradient(-this.size, 0, this.size, 0);
+                gradient.addColorStop(0, '#38bdf8');
+                gradient.addColorStop(0.5, this.color);
+                gradient.addColorStop(1, '#67e8f9');
+
+                canvasCtx.fillStyle = gradient;
                 canvasCtx.beginPath();
-                let tailWiggle = Math.sin(this.wiggle) * 6;
+                let tail = Math.sin(this.wiggle) * 7;
                 canvasCtx.moveTo(this.size, 0);
-                canvasCtx.quadraticCurveTo(0, -this.size/2, -this.size, tailWiggle);
-                canvasCtx.lineTo(-this.size - 10, tailWiggle - 10);
-                canvasCtx.lineTo(-this.size - 10, tailWiggle + 10);
+                canvasCtx.quadraticCurveTo(0, -this.size/2, -this.size, tail);
+                canvasCtx.lineTo(-this.size - 14, tail - 14);
+                canvasCtx.lineTo(-this.size - 8, tail);
+                canvasCtx.lineTo(-this.size - 14, tail + 14);
                 canvasCtx.quadraticCurveTo(0, this.size/2, this.size, 0);
                 canvasCtx.fill();
+
+                // Bright cartoon eye
+                canvasCtx.fillStyle = '#ffffff'; canvasCtx.beginPath(); canvasCtx.arc(this.size*0.4, -5, 6, 0, Math.PI*2); canvasCtx.fill();
+                canvasCtx.fillStyle = '#0f172a'; canvasCtx.beginPath(); canvasCtx.arc(this.size*0.45, -5, 3, 0, Math.PI*2); canvasCtx.fill();
                 canvasCtx.restore();
             }
         }
 
-        function initEnvironment() {
-            canvasElement.width = window.innerWidth;
-            canvasElement.height = window.innerHeight;
-            fishArray = []; padArray = [];
-            for(let i=0; i<5; i++) fishArray.push(new Fish());
-            for(let i=0; i<CONFIG.padCount; i++) padArray.push(new LilyPad(i, CONFIG.padCount));
+        class Trash {
+            constructor() {
+                this.x = Math.random() * window.innerWidth;
+                this.resetY();
+                this.size = 24;
+                this.speedX = 0.5 + Math.random() * 0.7;
+                this.rotation = Math.random() * Math.PI;
+                this.rotSpeed = 0.01 + Math.random() * 0.02;
+                this.isVacuumed = false;
+                this.type = Math.random() > 0.5 ? 'bottle' : 'can';
+            }
+            resetY() {
+                let waterTop = window.innerHeight * CONFIG.landLineY;
+                this.y = waterTop + 30 + Math.random() * (window.innerHeight - waterTop - 90);
+            }
+            update(trackers) {
+                if (!this.isVacuumed) {
+                    this.x += this.speedX;
+                    this.rotation += this.rotSpeed;
+                    if (this.x > window.innerWidth + 50) this.x = -50;
+                }
+
+                trackers.forEach(t => {
+                    if (t.y > window.innerHeight * CONFIG.landLineY) {
+                        let dist = Math.hypot(this.x - t.x, this.y - t.y);
+                        // Vacuum capture trigger range
+                        if (dist < CONFIG.touchRadius) {
+                            this.isVacuumed = true;
+                            this.x = lerp(this.x, t.x, 0.25);
+                            this.y = lerp(this.y, t.y, 0.25);
+
+                            // Absolute absorption threshold
+                            if (dist < 25) {
+                                for (let p = 0; p < 12; p++) particleArray.push(new Particle(this.x, this.y, '#4ade80'));
+                                trashCleanedCount++;
+                                scoreVal.innerText = trashCleanedCount;
+                                respawnTrash(this);
+                            }
+                        }
+                    }
+                });
+            }
+            draw() {
+                canvasCtx.save();
+                canvasCtx.translate(this.x, this.y);
+                canvasCtx.rotate(this.rotation);
+                
+                // Clear, bold silhouettes for game visibility
+                if(this.type === 'bottle') {
+                    canvasCtx.fillStyle = 'rgba(226, 232, 240, 0.85)';
+                    canvasCtx.strokeStyle = '#64748b';
+                    canvasCtx.lineWidth = 2.5;
+                    canvasCtx.fillRect(-10, -22, 20, 44);
+                    canvasCtx.strokeRect(-10, -22, 20, 44);
+                    canvasCtx.fillRect(-5, -30, 10, 8);
+                } else {
+                    canvasCtx.fillStyle = '#f8fafc';
+                    canvasCtx.strokeStyle = '#ef4444'; // Red soda can accents
+                    canvasCtx.lineWidth = 3;
+                    canvasCtx.fillRect(-12, -16, 24, 32);
+                    canvasCtx.strokeRect(-12, -16, 24, 32);
+                }
+                canvasCtx.restore();
+            }
+        }
+
+        function respawnTrash(instance) {
+            let idx = trashArray.indexOf(instance);
+            if(idx !== -1) trashArray[idx] = new Trash();
+        }
+
+        class Particle {
+            constructor(x, y, color, type = 'dot') {
+                this.x = x; this.y = y; this.color = color; this.type = type;
+                this.size = type === 'ring' ? 8 : 3 + Math.random() * 5;
+                this.vx = (Math.random() - 0.5) * 6;
+                this.vy = (Math.random() - 0.5) * 6;
+                this.alpha = 1.0;
+            }
+            update() {
+                if(this.type === 'ring') {
+                    this.size += 4.5;
+                    this.alpha -= 0.04;
+                } else {
+                    this.x += this.vx; this.y += this.vy;
+                    this.alpha -= 0.02;
+                }
+            }
+            draw() {
+                canvasCtx.save();
+                canvasCtx.globalAlpha = this.alpha;
+                canvasCtx.beginPath();
+                if(this.type === 'ring') {
+                    canvasCtx.strokeStyle = this.color;
+                    canvasCtx.lineWidth = 4;
+                    canvasCtx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                    canvasCtx.stroke();
+                } else {
+                    canvasCtx.fillStyle = this.color;
+                    canvasCtx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                    canvasCtx.fill();
+                }
+                canvasCtx.restore();
+            }
         }
 
         // =================================================================
-        // 🦾 POSE GRAPHICS PIPELINE & EXTRACTION TRACKER
+        // 🗺️ 3-TIER ECO ENVIRONMENT DRAW ENGINE
         // =================================================================
-        function processPose(results) {
+        
+        function drawSceneBackground(trackers) {
+            let w = canvasElement.width;
+            let h = canvasElement.height;
+            let skyLimit = h * CONFIG.skyLineY;
+            let landLimit = h * CONFIG.landLineY;
+
+            // 🌤️ 1. Sky Tier
+            let skyGrad = canvasCtx.createLinearGradient(0, 0, 0, skyLimit);
+            skyGrad.addColorStop(0, '#e0f2fe'); skyGrad.addColorStop(1, '#bae6fd');
+            canvasCtx.fillStyle = skyGrad; canvasCtx.fillRect(0, 0, w, skyLimit);
+
+            // ☀️ Interactive Sun Pipeline (Animate scale smoothly)
+            let sunX = w * 0.5, sunY = h * 0.14, sunBaseRad = 50;
+            isSunInteracting = false;
+            
+            trackers.forEach(t => {
+                if(t.y < skyLimit) {
+                    if(Math.hypot(t.x - sunX, t.y - sunY) < 150) isSunInteracting = true;
+                }
+            });
+
+            if(isSunInteracting) {
+                sunScale = lerp(sunScale, 1.35, 0.1);
+                if(Math.random() > 0.8) particleArray.push(new Particle(sunX + (Math.random()-0.5)*60, sunY + (Math.random()-0.5)*60, '#fde047'));
+            } else {
+                sunScale = lerp(sunScale, 1.0, 0.1);
+            }
+
+            canvasCtx.save();
+            canvasCtx.translate(sunX, sunY);
+            canvasCtx.scale(sunScale, sunScale);
+            
+            // Rotating outer glow rays
+            animationTime += 0.01;
+            canvasCtx.fillStyle = 'rgba(253, 224, 71, 0.4)';
+            canvasCtx.save(); canvasCtx.rotate(animationTime * 0.5);
+            for(let i=0; i<8; i++) { canvasCtx.rotate(Math.PI/4); canvasCtx.fillRect(-10, -sunBaseRad - 15, 20, 25); }
+            canvasCtx.restore();
+
+            // Main Core
+            canvasCtx.fillStyle = '#facc15'; canvasCtx.beginPath(); canvasCtx.arc(0, 0, sunBaseRad, 0, Math.PI*2); canvasCtx.fill();
+            // Facial Features
+            canvasCtx.fillStyle = '#334155'; canvasCtx.beginPath();
+            canvasCtx.arc(-14, -8, 5, 0, Math.PI*2); canvasCtx.arc(14, -8, 5, 0, Math.PI*2); canvasCtx.fill();
+            canvasCtx.strokeStyle = '#334155'; canvasCtx.lineWidth = 4; canvasCtx.lineCap = 'round';
+            canvasCtx.beginPath(); 
+            if(isSunInteracting) { canvasCtx.arc(0, 4, 16, 0, Math.PI); } // Giggle Open Smile
+            else { canvasCtx.arc(0, 6, 12, 0, Math.PI); }
+            canvasCtx.stroke();
+            canvasCtx.restore();
+
+            // 🪵 2. Land Tier (Middle Third)
+            let landGrad = canvasCtx.createLinearGradient(0, skyLimit, 0, landLimit);
+            landGrad.addColorStop(0, '#4ade80'); landGrad.addColorStop(1, '#22c55e');
+            canvasCtx.fillStyle = landGrad; canvasCtx.fillRect(0, skyLimit, w, landLimit - skyLimit);
+
+            // 🌊 3. Water Tier (Lower Third)
+            let waterGrad = canvasCtx.createLinearGradient(0, landLimit, 0, h);
+            waterGrad.addColorStop(0, '#0284c7'); waterGrad.addColorStop(1, '#075985');
+            canvasCtx.fillStyle = waterGrad; canvasCtx.fillRect(0, landLimit, w, h - landLimit);
+
+            // Translucent Moving Wave Strips
+            canvasCtx.fillStyle = 'rgba(56, 189, 248, 0.25)';
+            canvasCtx.beginPath(); canvasCtx.moveTo(0, landLimit);
+            for(let x=0; x<=w; x+=25) canvasCtx.lineTo(x, landLimit + Math.sin(x*0.015 + animationTime * 3)*6);
+            canvasCtx.lineTo(w, h); canvasCtx.lineTo(0, h); canvasCtx.fill();
+        }
+
+        // =================================================================
+        // 🦴 SKETHAL MODEL PROCESSING LOOP
+        // =================================================================
+        
+        function onPoseEngineResults(results) {
             let w = canvasElement.width;
             let h = canvasElement.height;
             activeTrackers = [];
 
+            // Core matrix rendering transforms matching mirroring toggle states
             canvasCtx.clearRect(0, 0, w, h);
             canvasCtx.save();
-            
-            // Custom Mirror matrix implementation matching config state preference
             if(CONFIG.mirror) {
-                canvasCtx.translate(w, 0);
-                canvasCtx.scale(-1, 1);
+                canvasCtx.translate(w, 0); canvasCtx.scale(-1, 1);
             }
 
-            // --- 🎬 Draw 3-Tier Canvas Background Base ---
-            let skyLimit = h * CONFIG.skyLineY;
-            let landLimit = h * CONFIG.landLineY;
-
-            // Sky
-            canvasCtx.fillStyle = '#bae6fd'; canvasCtx.fillRect(0, 0, w, skyLimit);
-            // Sun ☀️
-            canvasCtx.fillStyle = '#fde047'; canvasCtx.beginPath(); canvasCtx.arc(w*0.5, h*0.12, 45, 0, Math.PI*2); canvasCtx.fill();
-            // Land
-            canvasCtx.fillStyle = '#22c55e'; canvasCtx.fillRect(0, skyLimit, w, landLimit - skyLimit);
-            // Water
-            canvasCtx.fillStyle = '#0284c7'; canvasCtx.fillRect(0, landLimit, w, h - landLimit);
-
-            // Wave Crest Processing Animate loop
-            animationTime += 0.04;
-            canvasCtx.fillStyle = 'rgba(56, 189, 248, 0.3)';
-            canvasCtx.beginPath(); canvasCtx.moveTo(0, landLimit);
-            for(let x=0; x<=w; x+=30) canvasCtx.lineTo(x, landLimit + Math.sin(x*0.01 + animationTime)*6);
-            canvasCtx.lineTo(w, h); canvasCtx.lineTo(0, h); canvasCtx.fill();
-
-            // --- 🦴 Skeletal Extraction Landmark Tracker Loop ---
+            // Populate system coordinate maps from skeleton vectors if visible
             if (results.poseLandmarks) {
                 loadingScreen.style.opacity = 0;
-
-                // Extract Key Landmarks: Wrists (15, 16), Index Fingers (19, 20), Ankles/Feet (27, 28, 31, 32)
-                const targetIndices = [15, 16, 19, 20, 27, 28, 31, 32];
                 
-                targetIndices.forEach(idx => {
-                    let pt = results.poseLandmarks[idx];
-                    if(pt && pt.visibility > 0.5) {
-                        // Compute coordinate location mapped against system transformations
-                        let targetX = CONFIG.mirror ? (pt.x * w) : (w - (pt.x * w));
-                        activeTrackers.push({ x: targetX, y: pt.y * h, type: idx });
+                // Mapped Targets: Wrists(15,16), Index Fingers(19,20), Feet/Ankles(27,28,31,32)
+                const boneIndices = [15, 16, 19, 20, 27, 28, 31, 32];
+                boneIndices.forEach(idx => {
+                    let mark = results.poseLandmarks[idx];
+                    if(mark && mark.visibility > 0.55) {
+                        let calcX = CONFIG.mirror ? (mark.x * w) : (w - (mark.x * w));
+                        activeTrackers.push({ x: calcX, y: mark.y * h });
                     }
                 });
             }
 
-            // Update & Render Game Elements
-            padArray.forEach(pad => { pad.update(activeTrackers); pad.draw(); });
-            fishArray.forEach(fish => { fish.update(activeTrackers); fish.draw(); });
+            // Redraw Environment
+            drawSceneBackground(activeTrackers);
 
-            // --- 🔴 Draw Debug Vector Trackers on Screen for verification ---
+            // Update Game Entities
+            padArray.forEach(p => { p.update(activeTrackers); p.draw(); });
+            fishArray.forEach(f => { f.update(activeTrackers); f.draw(); });
+            trashArray.forEach(t => { t.update(activeTrackers); t.draw(); });
+            
+            // Particles pipeline update loop
+            particleArray.forEach((part, index) => {
+                part.update(); part.draw();
+                if(part.alpha <= 0) particleArray.splice(index, 1);
+            });
+
+            // --- 🔴 Render Clean Minimalistic Custom Sensor Tracker Dots ---
             activeTrackers.forEach(t => {
                 canvasCtx.save();
-                // Determine point type label context string
-                let isFoot = t.type >= 27;
-                canvasCtx.fillStyle = isFoot ? '#ef4444' : '#fbbf24'; // Red for Feet, Gold for Hands/Fingers
+                // Determine whether to paint hand (gold sparkle glow) or foot (neon aquatic pulse)
+                let isSky = t.y < h * CONFIG.landLineY;
+                
+                canvasCtx.shadowBlur = 15;
+                canvasCtx.shadowColor = isSky ? '#fbbf24' : '#38bdf8';
+                canvasCtx.fillStyle = '#ffffff'; // Solid white core center looks incredibly professional
                 canvasCtx.beginPath();
-                canvasCtx.arc(CONFIG.mirror ? t.x : w - t.x, t.y, 18, 0, Math.PI * 2);
+                canvasCtx.arc(CONFIG.mirror ? t.x : w - t.x, t.y, CONFIG.dotSize, 0, Math.PI * 2);
                 canvasCtx.fill();
-                canvasCtx.strokeStyle = '#ffffff';
-                canvasCtx.lineWidth = 3;
-                canvasCtx.stroke();
                 canvasCtx.restore();
             });
 
@@ -377,56 +613,35 @@
 
         function lerp(start, end, amt) { return (1 - amt) * start + amt * end; }
 
-        // =================================================================
-        // 🔄 INITIALIZATION & LIFECYCLE MANAGEMENT
-        // =================================================================
-        let poseInstance = null;
-        let cameraInstance = null;
-
-        function initMediaPipe() {
-            CONFIG.confidence = parseFloat(document.getElementById('param-confidence').value);
-            document.getElementById('val-confidence').innerText = CONFIG.confidence;
-
-            poseInstance = new Pose({
-                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
-            });
-
-            poseInstance.setOptions({
-                modelComplexity: 1,
-                smoothLandmarks: true,
-                minDetectionConfidence: CONFIG.confidence,
-                minTrackingConfidence: CONFIG.confidence
-            });
-
-            poseInstance.onResults(processPose);
-
-            if(!cameraInstance) {
-                cameraInstance = new Camera(videoElement, {
-                    onFrame: async () => {
-                        if(poseInstance) await poseInstance.send({ image: videoElement });
-                    },
-                    width: 640, height: 480
-                });
-                cameraInstance.start();
-            }
-        }
-
-        function reinitMediaPipe() {
-            if(poseInstance) {
-                poseInstance.close();
-                initMediaPipe();
-            }
-        }
-
-        window.addEventListener('resize', () => {
+        function initEcosystemPools() {
             canvasElement.width = window.innerWidth;
             canvasElement.height = window.innerHeight;
-            initEnvironment();
+            
+            fishArray = []; trashArray = []; padArray = [];
+            for(let i=0; i<5; i++) fishArray.push(new Fish());
+            for(let i=0; i<4; i++) trashArray.push(new Trash());
+            for(let i=0; i<CONFIG.padCount; i++) padArray.push(new LilyPad(i, CONFIG.padCount));
+        }
+
+        // Initialize MediaPipe Instance Pipeline Hooks
+        const pose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
+        pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+        pose.onResults(onPoseEngineResults);
+
+        const camera = new Camera(videoElement, {
+            onFrame: async () => { await pose.send({ image: videoElement }); },
+            width: 640, height: 480
         });
 
-        // Fire lifecycle setup hooks
-        initEnvironment();
-        initMediaPipe();
+        // Mirror active monitor stream video display container safely
+        navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+            monitorElement.srcObject = stream;
+        });
+
+        window.addEventListener('resize', () => { initEcosystemPools(); updateParameters(); });
+
+        initEcosystemPools();
+        camera.start();
     </script>
 </body>
 </html>
