@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Magical 3-Tier Interactive River Ecosystem</title>
+    <title>Soothing Sensory River Installation</title>
     
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
@@ -11,8 +11,8 @@
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            background: #090d16;
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #05070c;
+            font-family: system-ui, -apple-system, sans-serif;
             overflow: hidden;
             width: 100vw;
             height: 100vh;
@@ -22,40 +22,30 @@
             position: relative;
             flex-grow: 1;
             height: 100vh;
-            background: #0284c7;
         }
-        /* The actual tracking video hidden in background */
+        /* Full-screen embedded ambient camera tracking layer */
         #webcam {
             position: absolute;
-            width: 1px;
-            height: 1px;
-            opacity: 0;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 1;
+            opacity: 0.15; /* Default soft visual blend */
             pointer-events: none;
         }
-        /* Interactive Display Canvas */
+        .mirror-view {
+            transform: scaleX(-1);
+        }
+        /* Main Interactive Graphics Render View */
         #output_canvas {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-        }
-        /* --- 📹 Customizable Live Webcam Mirror Monitor --- */
-        #webcam-monitor {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            width: 200px;
-            height: 150px;
-            border-radius: 12px;
-            border: 3px solid rgba(255, 255, 255, 0.8);
-            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
-            object-fit: cover;
-            z-index: 40;
-            background: #000;
-        }
-        .mirror-mode {
-            transform: scaleX(-1);
+            z-index: 2;
         }
         
         /* --- 🎛️ Dashboard Control Panel Sidebar --- */
@@ -65,12 +55,12 @@
             right: 0;
             width: 340px;
             height: 100%;
-            background: rgba(15, 23, 42, 0.95);
-            backdrop-filter: blur(12px);
-            border-left: 1px solid rgba(255,255,255,0.1);
+            background: rgba(11, 17, 32, 0.96);
+            backdrop-filter: blur(15px);
+            border-left: 1px solid rgba(255,255,255,0.08);
             padding: 25px;
-            color: #f8fafc;
-            box-shadow: -10px 0 30px rgba(0,0,0,0.5);
+            color: #f1f5f9;
+            box-shadow: -10px 0 40px rgba(0,0,0,0.6);
             transform: translateX(100%);
             transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
             z-index: 50;
@@ -81,61 +71,65 @@
             position: absolute;
             top: 20px;
             right: 20px;
-            background: #0ea5e9;
+            background: #0284c7;
             color: white;
             border: none;
-            padding: 12px 20px;
+            padding: 12px 24px;
             border-radius: 30px;
             font-weight: bold;
             cursor: pointer;
-            box-shadow: 0 4px 15px rgba(14, 165, 233, 0.4);
+            box-shadow: 0 4px 20px rgba(2, 132, 199, 0.3);
             z-index: 60;
             transition: all 0.2s ease;
         }
-        .toggle-btn:hover { background: #0284c7; }
+        .toggle-btn:hover { background: #0ea5e9; }
         
-        h3 { margin-bottom: 20px; color: #38bdf8; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;}
+        h3 { margin-bottom: 20px; color: #38bdf8; font-size: 18px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; }
         .setting-group { margin-bottom: 22px; }
-        label { display: block; font-size: 12px; font-weight: 600; color: #94a3b8; margin-bottom: 8px; text-transform: uppercase;}
+        label { display: block; font-size: 11px; font-weight: 700; color: #94a3b8; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
         .slider-container { display: flex; align-items: center; gap: 12px; }
-        input[type="range"] { flex-grow: 1; accent-color: #38bdf8; background: #334155; height: 6px; border-radius: 3px; appearance: none; }
-        .val-display { font-family: monospace; font-size: 14px; color: #38bdf8; width: 50px; text-align: right; }
+        input[type="range"] { flex-grow: 1; accent-color: #38bdf8; background: #1e293b; height: 6px; border-radius: 3px; appearance: none; }
+        select { width: 100%; background: #1e293b; color: white; border: 1px solid #334155; padding: 8px 12px; border-radius: 8px; font-size: 14px; outline: none; }
+        .val-display { font-family: monospace; font-size: 13px; color: #38bdf8; width: 45px; text-align: right; }
         
         .switch { position: relative; display: inline-block; width: 46px; height: 24px; }
         .switch input { opacity: 0; width: 0; height: 0; }
-        .slider-box { position: absolute; cursor: pointer; inset: 0; background-color: #334155; transition: .3s; border-radius: 24px; }
+        .slider-box { position: absolute; cursor: pointer; inset: 0; background-color: #1e293b; transition: .3s; border-radius: 24px; }
         .slider-box:before { position: absolute; content: ""; height: 16px; width: 16px; left: 4px; bottom: 4px; background-color: white; transition: .3s; border-radius: 50%; }
         input:checked + .slider-box { background-color: #0ea5e9; }
         input:checked + .slider-box:before { transform: translateX(22px); }
 
         #ui-score {
             position: absolute;
-            top: 20px;
-            left: 240px;
-            background: rgba(255,255,255,0.95);
-            padding: 10px 20px;
+            top: 25px;
+            left: 25px;
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(8px);
+            padding: 10px 22px;
             border-radius: 30px;
-            font-weight: bold;
-            color: #0369a1;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            font-size: 15px;
+            font-weight: 600;
+            color: #e2e8f0;
+            border: 1px solid rgba(255,255,255,0.1);
             z-index: 30;
+            pointer-events: none;
         }
 
         #loading {
             position: absolute;
             inset: 0;
-            background: #0f172a;
-            color: white;
+            background: #0b1120;
+            color: #94a3b8;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            font-size: 20px;
+            font-size: 18px;
             z-index: 100;
-            transition: opacity 0.5s ease;
+            transition: opacity 0.6s ease;
             pointer-events: none;
         }
-        .spinner { border: 3px solid rgba(255,255,255,0.1); width: 40px; height: 40px; border-radius: 50%; border-left-color: #38bdf8; animation: spin 1s linear infinite; margin-bottom: 15px; }
+        .spinner { border: 3px solid rgba(255,255,255,0.05); width: 45px; height: 45px; border-radius: 50%; border-left-color: #0ea5e9; animation: spin 1.2s linear infinite; margin-bottom: 15px; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
@@ -143,21 +137,21 @@
 
     <div id="loading">
         <div class="spinner"></div>
-        <div>Generating Magic Ecosystem Pipeline... Stand back!</div>
+        <div>Crafting a Calming Sensory World...</div>
     </div>
 
     <div id="app-container">
-        <video id="webcam-monitor" autoplay playsinline class="mirror-mode"></video>
-        <video id="webcam" autoplay playsinline></video>
+        <video id="webcam" autoplay playsinline class="mirror-view"></video>
+        <canvas id="output_canvas"></canvas>
         
-        <div id="ui-score">🗑️ Trash Cleaned: <span id="score-val">0</span></div>
-        <button class="toggle-btn" onclick="toggleSettings()">⚙️ Settings</button>
+        <div id="ui-score">🗑️ River Cleaned: <span id="score-val">0</span></div>
+        <button class="toggle-btn" onclick="toggleSettings()">⚙️ Adjust Setup</button>
         
         <div id="control-panel">
-            <h3>System Settings</h3>
+            <h3>Exhibit Controller</h3>
             
             <div class="setting-group">
-                <label>Mirror Interactive Scene</label>
+                <label>Mirror View Movement</label>
                 <label class="switch">
                     <input type="checkbox" id="param-mirror" checked onchange="updateParameters()">
                     <span class="slider-box"></span>
@@ -165,26 +159,35 @@
             </div>
 
             <div class="setting-group">
+                <label>Webcam Background Blend</label>
+                <div class="slider-container">
+                    <input type="range" id="param-cam-opac" min="0" max="0.5" step="0.01" value="0.15" oninput="updateParameters()">
+                    <span class="val-display" id="val-cam-opac">15%</span>
+                </div>
+            </div>
+
+            <div class="setting-group">
+                <label>Tracking Overlay Style</label>
+                <select id="param-style" onchange="updateParameters()">
+                    <option value="dots" selected>Calming Glowing Circles</option>
+                    <option value="skeleton">Skeletal Vector Lines</option>
+                    <option value="none">Hidden / Invisible Tracker</option>
+                </select>
+            </div>
+
+            <div class="setting-group">
                 <label>Sky Height (Top %)</label>
                 <div class="slider-container">
-                    <input type="range" id="param-sky" min="0.1" max="0.45" step="0.01" value="0.33" oninput="updateParameters()">
-                    <span class="val-display" id="val-sky">33%</span>
+                    <input type="range" id="param-sky" min="0.15" max="0.4" step="0.01" value="0.30" oninput="updateParameters()">
+                    <span class="val-display" id="val-sky">30%</span>
                 </div>
             </div>
 
             <div class="setting-group">
-                <label>Water Level (Bottom %)</label>
+                <label>River Level (Bottom %)</label>
                 <div class="slider-container">
-                    <input type="range" id="param-water" min="0.5" max="0.85" step="0.01" value="0.66" oninput="updateParameters()">
-                    <span class="val-display" id="val-water">66%</span>
-                </div>
-            </div>
-
-            <div class="setting-group">
-                <label>Sensor Size (Tracker Dots)</label>
-                <div class="slider-container">
-                    <input type="range" id="param-dotsize" min="4" max="25" step="1" value="10" oninput="updateParameters()">
-                    <span class="val-display" id="val-dotsize">10px</span>
+                    <input type="range" id="param-water" min="0.55" max="0.85" step="0.01" value="0.68" oninput="updateParameters()">
+                    <span class="val-display" id="val-water">68%</span>
                 </div>
             </div>
             
@@ -196,13 +199,10 @@
                 </div>
             </div>
         </div>
-
-        <canvas id="output_canvas"></canvas>
     </div>
 
     <script>
         const videoElement = document.getElementById('webcam');
-        const monitorElement = document.getElementById('webcam-monitor');
         const canvasElement = document.getElementById('output_canvas');
         const canvasCtx = canvasElement.getContext('2d');
         const scoreVal = document.getElementById('score-val');
@@ -211,6 +211,7 @@
         let animationTime = 0;
         let trashCleanedCount = 0;
         let activeTrackers = [];
+        let rawLandmarks = null;
         
         // Entity Pools
         let fishArray = [];
@@ -218,16 +219,17 @@
         let padArray = [];
         let particleArray = [];
 
-        // Global Interactive Variable Scaling
+        // Smooth Sun Scaling Parameters
         let sunScale = 1.0;
-        let isSunInteracting = false;
+        let sunRingTimer = 0;
 
         let CONFIG = {
             mirror: true,
-            skyLineY: 0.33,
-            landLineY: 0.66,
+            bgOpacity: 0.15,
+            trackerStyle: 'dots',
+            skyLineY: 0.30,
+            landLineY: 0.68,
             touchRadius: 130,
-            dotSize: 10,
             padCount: 4
         };
 
@@ -237,49 +239,54 @@
 
         function updateParameters() {
             CONFIG.mirror = document.getElementById('param-mirror').checked;
+            CONFIG.bgOpacity = parseFloat(document.getElementById('param-cam-opac').value);
+            CONFIG.trackerStyle = document.getElementById('param-style').value;
             CONFIG.skyLineY = parseFloat(document.getElementById('param-sky').value);
             CONFIG.landLineY = parseFloat(document.getElementById('param-water').value);
             CONFIG.touchRadius = parseInt(document.getElementById('param-radius').value);
-            CONFIG.dotSize = parseInt(document.getElementById('param-dotsize').value);
 
+            document.getElementById('val-cam-opac').innerText = Math.round(CONFIG.bgOpacity * 100) + "%";
             document.getElementById('val-sky').innerText = Math.round(CONFIG.skyLineY * 100) + "%";
             document.getElementById('val-water').innerText = Math.round(CONFIG.landLineY * 100) + "%";
             document.getElementById('val-radius').innerText = CONFIG.touchRadius + "px";
-            document.getElementById('val-dotsize').innerText = CONFIG.dotSize + "px";
 
-            // Mirror webcam overlay container dynamically based on setup config
-            if(CONFIG.mirror) {
-                monitorElement.classList.add('mirror-mode');
-            } else {
-                monitorElement.classList.remove('mirror-mode');
-            }
+            // Apply blend styling to ambient camera layer directly
+            videoElement.style.opacity = CONFIG.bgOpacity;
+            if(CONFIG.mirror) videoElement.classList.add('mirror-view');
+            else videoElement.classList.remove('mirror-view');
             
             fishArray.forEach(f => f.resetY());
             trashArray.forEach(t => t.resetY());
-            padArray.forEach(p => p.y = window.innerHeight - 40);
+            padArray.forEach(p => p.y = window.innerHeight - 35);
         }
 
         // =================================================================
-        // 🎨 HIGH-FIDELITY DESIGN ASSET RENDERING CLASSES
+        // 🐠 GRAPHICS ENGINE DESIGN INFUSED WITH SENSORY MODALITIES
         // =================================================================
         
         class LilyPad {
             constructor(index, total) {
                 this.x = (window.innerWidth / (total + 1)) * (index + 1);
-                this.y = window.innerHeight - 40; 
-                this.radiusX = 70;
+                this.y = window.innerHeight - 35; 
+                this.radiusX = 75;
                 this.radiusY = 24;
-                const hues = [145, 160, 135, 155];
-                this.color = `hsl(${hues[index % hues.length]}, 75%, 45%)`;
+                // Soft, non-glaring unique sensory colors
+                const colors = ['#818cf8', '#2dd4bf', '#34d399', '#fb923c'];
+                this.color = colors[index % colors.length];
                 this.glow = 0;
+                this.squish = 1.0;
             }
             update(trackers) {
-                this.glow = lerp(this.glow, 0, 0.08);
+                this.glow = lerp(this.glow, 0, 0.05);
+                this.squish = lerp(this.squish, 1.0, 0.08);
+                
                 trackers.forEach(t => {
                     if(t.y > window.innerHeight * CONFIG.landLineY) {
                         if(Math.hypot(this.x - t.x, this.y - t.y) < CONFIG.touchRadius) {
-                            if(this.glow < 0.2) {
-                                for(let r=0; r<2; r++) particleArray.push(new Particle(this.x, this.y, '#34d399', 'ring'));
+                            if(this.glow < 0.1) {
+                                // Soothing slow-fading expansion rings
+                                for(let r=0; r<2; r++) particleArray.push(new Particle(this.x, this.y, this.color, 'ring', 1.5));
+                                this.squish = 0.65;
                             }
                             this.glow = 1.0;
                         }
@@ -288,55 +295,49 @@
             }
             draw() {
                 canvasCtx.save();
-                canvasCtx.shadowBlur = this.glow * 30;
-                canvasCtx.shadowColor = '#6ee7b7';
-                
-                // Draw Natural Leaf Organic Contours
+                canvasCtx.globalAlpha = 0.85;
+                canvasCtx.shadowBlur = this.glow * 25;
+                canvasCtx.shadowColor = this.color;
                 canvasCtx.fillStyle = this.color;
-                canvasCtx.beginPath();
-                canvasCtx.ellipse(this.x, this.y, this.radiusX * (1 + this.glow*0.15), this.radiusY * (1 - this.glow*0.2), 0, 0, Math.PI * 1.8);
-                canvasCtx.lineTo(this.x, this.y);
-                canvasCtx.closePath();
-                canvasCtx.fill();
                 
-                // Vein Lines
-                canvasCtx.strokeStyle = 'rgba(255,255,255,0.15)';
-                canvasCtx.lineWidth = 2;
                 canvasCtx.beginPath();
-                canvasCtx.moveTo(this.x, this.y); canvasCtx.lineTo(this.x - this.radiusX*0.5, this.y - 5);
-                canvasCtx.moveTo(this.x, this.y); canvasCtx.lineTo(this.x + this.radiusX*0.4, this.y + 5);
-                canvasCtx.stroke();
+                canvasCtx.ellipse(this.x, this.y, this.radiusX * (2.0 - this.squish), this.radiusY * this.squish, 0, 0, Math.PI * 1.8);
+                canvasCtx.lineTo(this.x, this.y);
+                canvasCtx.fill();
                 canvasCtx.restore();
             }
         }
 
         class Fish {
-            constructor() {
+            constructor(typeIndex) {
                 this.x = Math.random() * window.innerWidth;
                 this.resetY();
-                this.size = 35 + Math.random() * 15;
-                this.speedX = (Math.random() > 0.5 ? 1 : -1) * (1.5 + Math.random() * 2);
-                this.color = `hsl(${200 + Math.random() * 20}, 90%, 65%)`;
+                this.size = 30 + Math.random() * 12;
+                this.speedX = (Math.random() > 0.5 ? 1 : -1) * (0.8 + Math.random() * 0.8); // Lower velocities
+                this.typeIndex = typeIndex % 3;
                 this.wiggle = Math.random() * 10;
-                this.isReacting = false;
+                
+                // Diversified soothing types
+                if(this.typeIndex === 0) { this.color = '#38bdf8'; this.typeStr = 'trout'; }
+                else if(this.typeIndex === 1) { this.color = '#facc15'; this.typeStr = 'goldfish'; }
+                else { this.color = '#e2e8f0'; this.typeStr = 'minnow'; }
             }
             resetY() {
                 let waterTop = window.innerHeight * CONFIG.landLineY;
-                this.y = waterTop + 40 + Math.random() * (window.innerHeight - waterTop - 100);
+                this.y = waterTop + 40 + Math.random() * (window.innerHeight - waterTop - 90);
             }
             update(trackers) {
-                this.wiggle += 0.2;
+                this.wiggle += 0.12; // Slow organic wiggle rate
                 this.x += this.speedX;
                 if (this.x < -100 || this.x > window.innerWidth + 100) this.speedX *= -1;
 
-                this.isReacting = false;
                 trackers.forEach(t => {
                     if(t.y > window.innerHeight * CONFIG.landLineY) {
                         let dist = Math.hypot(this.x - t.x, this.y - t.y);
                         if(dist < CONFIG.touchRadius) {
-                            this.isReacting = true;
-                            this.speedX = Math.sign(this.x - t.x) * 4.5; // Swim away fast
-                            if(Math.random() > 0.85) particleArray.push(new Particle(this.x, this.y, 'rgba(255,255,255,0.4)', 'bubble'));
+                            // Turn around smoothly rather than popping away abruptly
+                            this.speedX = lerp(this.speedX, Math.sign(this.x - t.x) * 2.5, 0.05);
+                            if(Math.random() > 0.94) particleArray.push(new Particle(this.x, this.y, 'rgba(255,255,255,0.25)', 'dot'));
                         }
                     }
                 });
@@ -346,26 +347,27 @@
                 canvasCtx.translate(this.x, this.y);
                 if (this.speedX < 0) canvasCtx.scale(-1, 1);
 
-                // Beautiful Vector Fish Body Gradient
-                let gradient = canvasCtx.createLinearGradient(-this.size, 0, this.size, 0);
-                gradient.addColorStop(0, '#38bdf8');
-                gradient.addColorStop(0.5, this.color);
-                gradient.addColorStop(1, '#67e8f9');
-
-                canvasCtx.fillStyle = gradient;
+                canvasCtx.fillStyle = this.color;
                 canvasCtx.beginPath();
-                let tail = Math.sin(this.wiggle) * 7;
-                canvasCtx.moveTo(this.size, 0);
-                canvasCtx.quadraticCurveTo(0, -this.size/2, -this.size, tail);
-                canvasCtx.lineTo(-this.size - 14, tail - 14);
-                canvasCtx.lineTo(-this.size - 8, tail);
-                canvasCtx.lineTo(-this.size - 14, tail + 14);
-                canvasCtx.quadraticCurveTo(0, this.size/2, this.size, 0);
-                canvasCtx.fill();
+                let tail = Math.sin(this.wiggle) * 5;
 
-                // Bright cartoon eye
-                canvasCtx.fillStyle = '#ffffff'; canvasCtx.beginPath(); canvasCtx.arc(this.size*0.4, -5, 6, 0, Math.PI*2); canvasCtx.fill();
-                canvasCtx.fillStyle = '#0f172a'; canvasCtx.beginPath(); canvasCtx.arc(this.size*0.45, -5, 3, 0, Math.PI*2); canvasCtx.fill();
+                if(this.typeStr === 'goldfish') {
+                    // Fan tail model anatomy
+                    canvasCtx.moveTo(this.size, 0);
+                    canvasCtx.quadraticCurveTo(0, -this.size * 0.7, -this.size * 0.4, tail);
+                    canvasCtx.lineTo(-this.size, tail - 15);
+                    canvasCtx.lineTo(-this.size * 0.6, tail);
+                    canvasCtx.lineTo(-this.size, tail + 15);
+                    canvasCtx.quadraticCurveTo(0, this.size * 0.7, this.size, 0);
+                } else {
+                    // Sleek streamlined minnow/trout profile
+                    canvasCtx.moveTo(this.size, 0);
+                    canvasCtx.quadraticCurveTo(0, -this.size * 0.4, -this.size, tail);
+                    canvasCtx.lineTo(-this.size - 12, tail - 10);
+                    canvasCtx.lineTo(-this.size - 12, tail + 10);
+                    canvasCtx.quadraticCurveTo(0, this.size * 0.4, this.size, 0);
+                }
+                canvasCtx.fill();
                 canvasCtx.restore();
             }
         }
@@ -374,10 +376,9 @@
             constructor() {
                 this.x = Math.random() * window.innerWidth;
                 this.resetY();
-                this.size = 24;
-                this.speedX = 0.5 + Math.random() * 0.7;
+                this.size = 20;
+                this.speedX = 0.4 + Math.random() * 0.4;
                 this.rotation = Math.random() * Math.PI;
-                this.rotSpeed = 0.01 + Math.random() * 0.02;
                 this.isVacuumed = false;
                 this.type = Math.random() > 0.5 ? 'bottle' : 'can';
             }
@@ -388,25 +389,25 @@
             update(trackers) {
                 if (!this.isVacuumed) {
                     this.x += this.speedX;
-                    this.rotation += this.rotSpeed;
+                    this.rotation += 0.005;
                     if (this.x > window.innerWidth + 50) this.x = -50;
                 }
 
                 trackers.forEach(t => {
                     if (t.y > window.innerHeight * CONFIG.landLineY) {
                         let dist = Math.hypot(this.x - t.x, this.y - t.y);
-                        // Vacuum capture trigger range
                         if (dist < CONFIG.touchRadius) {
                             this.isVacuumed = true;
-                            this.x = lerp(this.x, t.x, 0.25);
-                            this.y = lerp(this.y, t.y, 0.25);
+                            // Smooth interpolation instead of snapping dramatically
+                            this.x = lerp(this.x, t.x, 0.15);
+                            this.y = lerp(this.y, t.y, 0.15);
 
-                            // Absolute absorption threshold
                             if (dist < 25) {
-                                for (let p = 0; p < 12; p++) particleArray.push(new Particle(this.x, this.y, '#4ade80'));
+                                for (let p = 0; p < 8; p++) particleArray.push(new Particle(this.x, this.y, '#34d399', 'dot', 0.8));
                                 trashCleanedCount++;
                                 scoreVal.innerText = trashCleanedCount;
-                                respawnTrash(this);
+                                let idx = trashArray.indexOf(this);
+                                if(idx !== -1) trashArray[idx] = new Trash();
                             }
                         }
                     }
@@ -414,48 +415,36 @@
             }
             draw() {
                 canvasCtx.save();
+                canvasCtx.globalAlpha = 0.5; // Soft translucent styling to reduce visual clutter
                 canvasCtx.translate(this.x, this.y);
                 canvasCtx.rotate(this.rotation);
-                
-                // Clear, bold silhouettes for game visibility
+                canvasCtx.strokeStyle = 'rgba(255,255,255,0.4)';
+                canvasCtx.lineWidth = 2;
                 if(this.type === 'bottle') {
-                    canvasCtx.fillStyle = 'rgba(226, 232, 240, 0.85)';
-                    canvasCtx.strokeStyle = '#64748b';
-                    canvasCtx.lineWidth = 2.5;
-                    canvasCtx.fillRect(-10, -22, 20, 44);
-                    canvasCtx.strokeRect(-10, -22, 20, 44);
-                    canvasCtx.fillRect(-5, -30, 10, 8);
+                    canvasCtx.strokeRect(-8, -18, 16, 36);
+                    canvasCtx.strokeRect(-4, -24, 8, 6);
                 } else {
-                    canvasCtx.fillStyle = '#f8fafc';
-                    canvasCtx.strokeStyle = '#ef4444'; // Red soda can accents
-                    canvasCtx.lineWidth = 3;
-                    canvasCtx.fillRect(-12, -16, 24, 32);
-                    canvasCtx.strokeRect(-12, -16, 24, 32);
+                    canvasCtx.strokeRect(-10, -14, 20, 28);
                 }
                 canvasCtx.restore();
             }
         }
 
-        function respawnTrash(instance) {
-            let idx = trashArray.indexOf(instance);
-            if(idx !== -1) trashArray[idx] = new Trash();
-        }
-
         class Particle {
-            constructor(x, y, color, type = 'dot') {
+            constructor(x, y, color, type = 'dot', speedScale = 1.0) {
                 this.x = x; this.y = y; this.color = color; this.type = type;
-                this.size = type === 'ring' ? 8 : 3 + Math.random() * 5;
-                this.vx = (Math.random() - 0.5) * 6;
-                this.vy = (Math.random() - 0.5) * 6;
+                this.size = type === 'ring' ? 5 : 2 + Math.random() * 4;
+                this.vx = (Math.random() - 0.5) * 3 * speedScale;
+                this.vy = (Math.random() - 0.5) * 3 * speedScale;
                 this.alpha = 1.0;
             }
             update() {
                 if(this.type === 'ring') {
-                    this.size += 4.5;
-                    this.alpha -= 0.04;
+                    this.size += 2.2; // Gentle outward ripple scaling speed
+                    this.alpha -= 0.015;
                 } else {
                     this.x += this.vx; this.y += this.vy;
-                    this.alpha -= 0.02;
+                    this.alpha -= 0.015;
                 }
             }
             draw() {
@@ -464,7 +453,7 @@
                 canvasCtx.beginPath();
                 if(this.type === 'ring') {
                     canvasCtx.strokeStyle = this.color;
-                    canvasCtx.lineWidth = 4;
+                    canvasCtx.lineWidth = 3;
                     canvasCtx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
                     canvasCtx.stroke();
                 } else {
@@ -477,10 +466,10 @@
         }
 
         // =================================================================
-        // 🗺️ 3-TIER ECO ENVIRONMENT DRAW ENGINE
+        // 🗺️ 3-TIER ECO BACKGROUND SCENE PRODUCER
         // =================================================================
         
-        function drawSceneBackground(trackers) {
+        function drawSceneTiers(trackers) {
             let w = canvasElement.width;
             let h = canvasElement.height;
             let skyLimit = h * CONFIG.skyLineY;
@@ -488,125 +477,148 @@
 
             // 🌤️ 1. Sky Tier
             let skyGrad = canvasCtx.createLinearGradient(0, 0, 0, skyLimit);
-            skyGrad.addColorStop(0, '#e0f2fe'); skyGrad.addColorStop(1, '#bae6fd');
+            skyGrad.addColorStop(0, '#0f172a'); skyGrad.addColorStop(1, '#1e293b'); // Dark soothing twilight
             canvasCtx.fillStyle = skyGrad; canvasCtx.fillRect(0, 0, w, skyLimit);
 
-            // ☀️ Interactive Sun Pipeline (Animate scale smoothly)
-            let sunX = w * 0.5, sunY = h * 0.14, sunBaseRad = 50;
-            isSunInteracting = false;
+            // ☀️ Soothing Radiant Sun (Golden Yellow Rings Engine)
+            let sunX = w * 0.5, sunY = h * 0.12, sunBaseRad = 45;
+            let isNearSun = false;
             
             trackers.forEach(t => {
                 if(t.y < skyLimit) {
-                    if(Math.hypot(t.x - sunX, t.y - sunY) < 150) isSunInteracting = true;
+                    if(Math.hypot(t.x - sunX, t.y - sunY) < 140) isNearSun = true;
                 }
             });
 
-            if(isSunInteracting) {
-                sunScale = lerp(sunScale, 1.35, 0.1);
-                if(Math.random() > 0.8) particleArray.push(new Particle(sunX + (Math.random()-0.5)*60, sunY + (Math.random()-0.5)*60, '#fde047'));
+            if(isNearSun) {
+                sunScale = lerp(sunScale, 1.2, 0.05);
+                sunRingTimer++;
+                if(sunRingTimer % 35 === 0) { // Soft cyclic intervals
+                    particleArray.push(new Particle(sunX, sunY, '#facc15', 'ring', 0.5));
+                }
             } else {
-                sunScale = lerp(sunScale, 1.0, 0.1);
+                sunScale = lerp(sunScale, 1.0, 0.05);
             }
 
             canvasCtx.save();
             canvasCtx.translate(sunX, sunY);
             canvasCtx.scale(sunScale, sunScale);
+            canvasCtx.fillStyle = '#eab308';
+            canvasCtx.beginPath(); canvasCtx.arc(0, 0, sunBaseRad, 0, Math.PI*2); canvasCtx.fill();
             
-            // Rotating outer glow rays
-            animationTime += 0.01;
-            canvasCtx.fillStyle = 'rgba(253, 224, 71, 0.4)';
-            canvasCtx.save(); canvasCtx.rotate(animationTime * 0.5);
-            for(let i=0; i<8; i++) { canvasCtx.rotate(Math.PI/4); canvasCtx.fillRect(-10, -sunBaseRad - 15, 20, 25); }
-            canvasCtx.restore();
-
-            // Main Core
-            canvasCtx.fillStyle = '#facc15'; canvasCtx.beginPath(); canvasCtx.arc(0, 0, sunBaseRad, 0, Math.PI*2); canvasCtx.fill();
-            // Facial Features
-            canvasCtx.fillStyle = '#334155'; canvasCtx.beginPath();
-            canvasCtx.arc(-14, -8, 5, 0, Math.PI*2); canvasCtx.arc(14, -8, 5, 0, Math.PI*2); canvasCtx.fill();
-            canvasCtx.strokeStyle = '#334155'; canvasCtx.lineWidth = 4; canvasCtx.lineCap = 'round';
-            canvasCtx.beginPath(); 
-            if(isSunInteracting) { canvasCtx.arc(0, 4, 16, 0, Math.PI); } // Giggle Open Smile
-            else { canvasCtx.arc(0, 6, 12, 0, Math.PI); }
-            canvasCtx.stroke();
+            // Minimal serene face
+            canvasCtx.fillStyle = '#1e293b'; canvasCtx.beginPath();
+            canvasCtx.arc(-12, -6, 4, 0, Math.PI*2); canvasCtx.arc(14, -6, 4, 0, Math.PI*2); canvasCtx.fill();
+            canvasCtx.strokeStyle = '#1e293b'; canvasCtx.lineWidth = 3; canvasCtx.lineCap = 'round';
+            canvasCtx.beginPath(); canvasCtx.arc(0, 4, 10, 0, Math.PI); canvasCtx.stroke();
             canvasCtx.restore();
 
             // 🪵 2. Land Tier (Middle Third)
             let landGrad = canvasCtx.createLinearGradient(0, skyLimit, 0, landLimit);
-            landGrad.addColorStop(0, '#4ade80'); landGrad.addColorStop(1, '#22c55e');
+            landGrad.addColorStop(0, '#064e3b'); landGrad.addColorStop(1, '#022c22'); // Forest deep green tones
             canvasCtx.fillStyle = landGrad; canvasCtx.fillRect(0, skyLimit, w, landLimit - skyLimit);
 
             // 🌊 3. Water Tier (Lower Third)
             let waterGrad = canvasCtx.createLinearGradient(0, landLimit, 0, h);
-            waterGrad.addColorStop(0, '#0284c7'); waterGrad.addColorStop(1, '#075985');
+            waterGrad.addColorStop(0, 'rgba(12, 74, 110, 0.85)'); waterGrad.addColorStop(1, 'rgba(3, 41, 63, 0.95)');
             canvasCtx.fillStyle = waterGrad; canvasCtx.fillRect(0, landLimit, w, h - landLimit);
 
-            // Translucent Moving Wave Strips
-            canvasCtx.fillStyle = 'rgba(56, 189, 248, 0.25)';
+            // Gentle moving wave lines
+            animationTime += 0.015;
+            canvasCtx.fillStyle = 'rgba(14, 165, 233, 0.15)';
             canvasCtx.beginPath(); canvasCtx.moveTo(0, landLimit);
-            for(let x=0; x<=w; x+=25) canvasCtx.lineTo(x, landLimit + Math.sin(x*0.015 + animationTime * 3)*6);
+            for(let x=0; x<=w; x+=30) canvasCtx.lineTo(x, landLimit + Math.sin(x*0.01 + animationTime * 1.5)*5);
             canvasCtx.lineTo(w, h); canvasCtx.lineTo(0, h); canvasCtx.fill();
         }
 
         // =================================================================
-        // 🦴 SKETHAL MODEL PROCESSING LOOP
+        // 🦴 SYSTEM SKELETAL INTERACTION LOGIC
         // =================================================================
         
         function onPoseEngineResults(results) {
             let w = canvasElement.width;
             let h = canvasElement.height;
             activeTrackers = [];
+            rawLandmarks = results.poseLandmarks;
 
-            // Core matrix rendering transforms matching mirroring toggle states
             canvasCtx.clearRect(0, 0, w, h);
             canvasCtx.save();
+            
+            // Coordinate transformation matching configuration
             if(CONFIG.mirror) {
                 canvasCtx.translate(w, 0); canvasCtx.scale(-1, 1);
             }
 
-            // Populate system coordinate maps from skeleton vectors if visible
-            if (results.poseLandmarks) {
+            if (rawLandmarks) {
                 loadingScreen.style.opacity = 0;
                 
                 // Mapped Targets: Wrists(15,16), Index Fingers(19,20), Feet/Ankles(27,28,31,32)
                 const boneIndices = [15, 16, 19, 20, 27, 28, 31, 32];
                 boneIndices.forEach(idx => {
-                    let mark = results.poseLandmarks[idx];
+                    let mark = rawLandmarks[idx];
                     if(mark && mark.visibility > 0.55) {
                         let calcX = CONFIG.mirror ? (mark.x * w) : (w - (mark.x * w));
-                        activeTrackers.push({ x: calcX, y: mark.y * h });
+                        activeTrackers.push({ x: calcX, y: mark.y * h, type: idx });
                     }
                 });
             }
 
-            // Redraw Environment
-            drawSceneBackground(activeTrackers);
+            // Render Layers
+            drawSceneTiers(activeTrackers);
 
-            // Update Game Entities
+            // Update System Pool Loops
             padArray.forEach(p => { p.update(activeTrackers); p.draw(); });
             fishArray.forEach(f => { f.update(activeTrackers); f.draw(); });
             trashArray.forEach(t => { t.update(activeTrackers); t.draw(); });
             
-            // Particles pipeline update loop
             particleArray.forEach((part, index) => {
                 part.update(); part.draw();
                 if(part.alpha <= 0) particleArray.splice(index, 1);
             });
 
-            // --- 🔴 Render Clean Minimalistic Custom Sensor Tracker Dots ---
-            activeTrackers.forEach(t => {
+            // --- 🦴 DYNAMIC OVERLAY DESIGN ENGINE STYLE TOGGLES ---
+            if(CONFIG.trackerStyle !== 'none' && rawLandmarks) {
                 canvasCtx.save();
-                // Determine whether to paint hand (gold sparkle glow) or foot (neon aquatic pulse)
-                let isSky = t.y < h * CONFIG.landLineY;
                 
-                canvasCtx.shadowBlur = 15;
-                canvasCtx.shadowColor = isSky ? '#fbbf24' : '#38bdf8';
-                canvasCtx.fillStyle = '#ffffff'; // Solid white core center looks incredibly professional
-                canvasCtx.beginPath();
-                canvasCtx.arc(CONFIG.mirror ? t.x : w - t.x, t.y, CONFIG.dotSize, 0, Math.PI * 2);
-                canvasCtx.fill();
+                if(CONFIG.trackerStyle === 'skeleton') {
+                    // Draw interconnected calming soft-blue bone tracking vectors
+                    canvasCtx.strokeStyle = 'rgba(56, 189, 248, 0.4)';
+                    canvasCtx.lineWidth = 5;
+                    canvasCtx.lineCap = 'round';
+                    
+                    const connections = [
+                        [11, 12], [11, 13], [13, 15], [12, 14], [14, 16], // Upper torso body
+                        [11, 23], [12, 24], [23, 24], [23, 25], [24, 26], [25, 27], [26, 28] // Lower base limbs
+                    ];
+                    
+                    connections.forEach(([i1, i2]) => {
+                        let p1 = rawLandmarks[i1], p2 = rawLandmarks[i2];
+                        if(p1 && p2 && p1.visibility > 0.5 && p2.visibility > 0.5) {
+                            let x1 = CONFIG.mirror ? (p1.x * w) : (w - (p1.x * w));
+                            let x2 = CONFIG.mirror ? (p2.x * w) : (w - (p2.x * w));
+                            canvasCtx.beginPath();
+                            canvasCtx.moveTo(x1, p1.y * h);
+                            canvasCtx.lineTo(x2, p2.y * h);
+                            canvasCtx.stroke();
+                        }
+                    });
+                }
+
+                // Render Active Tracking Target Markers (Circles Mode)
+                activeTrackers.forEach(t => {
+                    let isSky = t.y < h * CONFIG.landLineY;
+                    canvasCtx.save();
+                    canvasCtx.shadowBlur = 12;
+                    canvasCtx.shadowColor = isSky ? '#facc15' : '#38bdf8';
+                    canvasCtx.fillStyle = '#ffffff'; // Professional crisp white core center
+                    canvasCtx.beginPath();
+                    canvasCtx.arc(t.x, t.y, 8, 0, Math.PI * 2);
+                    canvasCtx.fill();
+                    canvasCtx.restore();
+                });
+
                 canvasCtx.restore();
-            });
+            }
 
             canvasCtx.restore();
         }
@@ -618,12 +630,12 @@
             canvasElement.height = window.innerHeight;
             
             fishArray = []; trashArray = []; padArray = [];
-            for(let i=0; i<5; i++) fishArray.push(new Fish());
+            for(let i=0; i<5; i++) fishArray.push(new Fish(i));
             for(let i=0; i<4; i++) trashArray.push(new Trash());
             for(let i=0; i<CONFIG.padCount; i++) padArray.push(new LilyPad(i, CONFIG.padCount));
         }
 
-        // Initialize MediaPipe Instance Pipeline Hooks
+        // Initialize MediaPipe Lifecycle Hook configurations
         const pose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
         pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
         pose.onResults(onPoseEngineResults);
@@ -633,9 +645,9 @@
             width: 640, height: 480
         });
 
-        // Mirror active monitor stream video display container safely
+        // Prompt client for internal media capture stream to map full-screen background canvas tracking
         navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
-            monitorElement.srcObject = stream;
+            videoElement.srcObject = stream;
         });
 
         window.addEventListener('resize', () => { initEcosystemPools(); updateParameters(); });
