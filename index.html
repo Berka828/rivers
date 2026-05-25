@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Magical River Ecosystem</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            background: #0f172a;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #app-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(to bottom, #bae6fd 0%, #38bdf8 40%, #0284c7 40%, #075985 100%);
+        }
+        /* Mirror the video feed for standard interactive installations */
+        video {
+            transform: scaleX(-1);
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+            pointer-events: none;
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            transform: scaleX(-1); /* Mirror canvas to match intuitive user movement */
+        }
+        #ui-overlay {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.9);
+            padding: 12px 24px;
+            border-radius: 50px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            font-size: 20px;
+            font-weight: bold;
+            color: #0369a1;
+            pointer-events: none;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            z-index: 10;
+            display: flex;
+            gap: 20px;
+        }
+        .score-tag {
+            color: #15803d;
+        }
+        #loading {
+            position: absolute;
+            inset: 0;
+            background: #0c4a6e;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            font-weight: bold;
+            z-index: 100;
+            transition: opacity 0.5s ease;
+        }
+        .spinner {
+            border: 4px solid rgba(255,255,255,0.1);
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border-left-color: #38bdf8;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <div id="loading">
+        <div class="spinner"></div>
+        <div>Waking up the Magic River... Keep hands visible!</div>
+    </div>
+
+    <div id="app-container">
+        <div id="ui-overlay">
+            <span>🌊 River Patrol</span>
+            <span class="score-tag">🗑️ Trash Cleaned: <span id="score-val">0</span></span>
+        </div>
+        <video id="webcam" autoplay playsinline></video>
+        <canvas id="output_canvas"></canvas>
+    </div>
+
+    <script>
+        const videoElement = document.getElementById('webcam');
+        const canvasElement = document.getElementById('output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        const scoreVal = document.getElementById('score-val');
+        const loadingScreen = document.getElementById('loading');
+
+        let trashCleanedCount = 0;
+        let animationFrameId;
+
+        // Configuration States
+        const CONFIG = {
+            waterLineY: 0.4, // Water takes lower 60% of screen
+            vacuumRadius: 150,
+            tickleRadius: 80
+        };
+
+        // Track past hand coordinates to accurately calculate velocity (Splashing)
+        let previousHands = [];
+
+        // Game Entities
+        let fishArray = [];
+        let trashArray = [];
+        let particleArray = [];
+        let bubbleArray = [];
+
+        // Interactive Object Classes
+        class Fish {
+            constructor() {
+                this.x = Math.random() * window.innerWidth;
+                this.y = (CONFIG.waterLineY + 0.1 + Math.random() * (1 - CONFIG.waterLineY - 0.2)) * window.innerHeight;
+                this.size = 35 + Math.random() * 20;
+                this.speedX = (Math.random() > 0.5 ? 1 : -1) * (1.5 + Math.random() * 2);
+                this.color = `hsl(${190 + Math.random() * 30}, 85%, 60%)`;
+                this.tickled = false;
+                this.tickleTimer = 0;
+                this.wigglePhase = Math.random() * Math.PI * 2;
+            }
+            update() {
+                this.wigglePhase += 0.15;
+                if(this.tickled) {
+                    this.tickleTimer += 0.1;
+                    this.y += Math.sin(this.tickleTimer * 2) * 3;
+                    if(this.tickleTimer > Math.PI * 2) {
+                        this.tickled = false;
+                        this.tickleTimer = 0;
+                    }
+                } else {
+                    this.x += this.speedX;
+                }
+
+                // Bounce off boundaries horizontally
+                if (this.x < -100 || this.x > window.innerWidth + 100) {
+                    this.speedX *= -1;
+                }
+            }
+            draw() {
+                canvasCtx.save();
+                canvasCtx.translate(this.x, this.y);
+                if (this.speedX < 0) canvasCtx.scale(-1, 1);
+
+                // Body Gradient
+                let gradient = canvasCtx.createLinearGradient(-this.size, 0, this.size, 0);
+                gradient.addColorStop(0, '#38bdf8');
+                gradient.addColorStop(0.5, this.color);
+                gradient.addColorStop(1, '#0284c7');
+
+                canvasCtx.fillStyle = gradient;
+                canvasCtx.beginPath();
+                // Tail Wiggle Calculation
+                let tailWiggle = Math.sin(this.wigglePhase) * 8;
+                
+                // Draw Stylized Fish Shape
+                canvasCtx.moveTo(this.size, 0);
+                canvasCtx.quadraticCurveTo(0, -this.size/2, -this.size, tailWiggle);
+                canvasCtx.lineTo(-this.size - 15, tailWiggle - 15);
+                canvasCtx.lineTo(-this.size - 10, tailWiggle);
+                canvasCtx.lineTo(-this.size - 15, tailWiggle + 15);
+                canvasCtx.quadraticCurveTo(0, this.size/2, this.size, 0);
+                canvasCtx.fill();
+
+                // Animated Eye
+                canvasCtx.fillStyle = '#ffffff';
+                canvasCtx.beginPath();
+                canvasCtx.arc(this.size * 0.5, -this.size * 0.12, 6, 0, Math.PI * 2);
+                canvasCtx.fill();
+                canvasCtx.fillStyle = '#0f172a';
+                canvasCtx.beginPath();
+                canvasCtx.arc(this.size * 0.55, -this.size * 0.12, 3, 0, Math.PI * 2);
+                canvasCtx.fill();
+
+                canvasCtx.restore();
+            }
+        }
+
+        class Trash {
+            constructor() {
+                this.x = Math.random() * window.innerWidth;
+                this.y = (CONFIG.waterLineY + 0.05 + Math.random() * (1 - CONFIG.waterLineY - 0.1)) * window.innerHeight;
+                this.size = 25;
+                this.speedX = 0.5 + Math.random() * 1;
+                this.rotation = Math.random() * Math.PI * 2;
+                this.rotSpeed = 0.01 + Math.random() * 0.02;
+                this.type = Math.random() > 0.5 ? 'bottle' : 'can';
+                this.isVacuumed = false;
+            }
+            update() {
+                if(!this.isVacuumed) {
+                    this.x += this.speedX;
+                    this.rotation += this.rotSpeed;
+                    if (this.x > window.innerWidth + 50) this.x = -50;
+                }
+            }
+            draw() {
+                canvasCtx.save();
+                canvasCtx.translate(this.x, this.y);
+                canvasCtx.rotate(this.rotation);
+                
+                if(this.type === 'bottle') {
+                    canvasCtx.fillStyle = 'rgba(226, 232, 240, 0.7)';
+                    canvasCtx.strokeStyle = '#94a3b8';
+                    canvasCtx.lineWidth = 2;
+                    canvasCtx.fillRect(-12, -25, 24, 50);
+                    canvasCtx.fillRect(-6, -35, 12, 10);
+                } else {
+                    canvasCtx.fillStyle = '#f1f5f9';
+                    canvasCtx.strokeStyle = '#cbd5e1';
+                    canvasCtx.lineWidth = 3;
+                    canvasCtx.fillRect(-15, -20, 30, 40);
+                    // Crinkle indentations for 4-6 year old clarity
+                    canvasCtx.strokeRect(-15, -20, 30, 40);
+                }
+                canvasCtx.restore();
+            }
+        }
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.size = 4 + Math.random() * 6;
+                this.vx = (Math.random() - 0.5) * 8;
+                this.vy = (Math.random() - 0.5) * 8 - (color === '#38bdf8' ? 4 : 0); // Splash maps up
+                this.alpha = 1;
+                this.color = color;
+            }
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.alpha -= 0.02;
+            }
+            draw() {
+                canvasCtx.save();
+                canvasCtx.globalAlpha = this.alpha;
+                canvasCtx.fillStyle = this.color;
+                canvasCtx.beginPath();
+                canvasCtx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                canvasCtx.fill();
+                canvasCtx.restore();
+            }
+        }
+
+        // Initialize entities
+        function initEnvironment() {
+            canvasElement.width = window.innerWidth;
+            canvasElement.height = window.innerHeight;
+            for(let i=0; i<6; i++) fishArray.push(new Fish());
+            for(let i=0; i<4; i++) trashArray.push(new Trash());
+        }
+
+        let sunPulse = 0;
+        let globalSunScale = 1;
+
+        function drawEcosystemEnvironment(activeHands) {
+            let width = canvasElement.width;
+            let height = canvasElement.height;
+            let waterBoundary = height * CONFIG.waterLineY;
+
+            // --- 1. Dynamic Vector Sky Rendering ---
+            let skyGrad = canvasCtx.createLinearGradient(0, 0, 0, waterBoundary);
+            skyGrad.addColorStop(0, '#bae6fd');
+            skyGrad.addColorStop(1, '#7dd3fc');
+            canvasCtx.fillStyle = skyGrad;
+            canvasCtx.fillRect(0, 0, width, waterBoundary);
+
+            // --- 2. Smiling Interactive Sun ---
+            sunPulse += 0.04;
+            let sunX = width * 0.5;
+            let sunY = 110;
+            let sunBaseRadius = 55;
+            
+            // Check interaction distance to sun
+            let handNearSun = false;
+            activeHands.forEach(hand => {
+                if(hand.y * height < waterBoundary) {
+                    let dx = (hand.x * width) - sunX;
+                    let dy = (hand.y * height) - sunY;
+                    if(Math.sqrt(dx*dx + dy*dy) < 180) handNearSun = true;
+                }
+            });
+
+            if(handNearSun) {
+                globalSunScale = THREE_linearInterpolate(globalSunScale, 1.25, 0.1);
+            } else {
+                globalSunScale = THREE_linearInterpolate(globalSunScale, 1.0, 0.1);
+            }
+
+            canvasCtx.save();
+            canvasCtx.translate(sunX, sunY);
+            canvasCtx.scale(globalSunScale, globalSunScale);
+
+            // Rotating Sun Rays
+            canvasCtx.fillStyle = '#fde047';
+            canvasCtx.save();
+            canvasCtx.rotate(sunPulse * 0.2);
+            for(let i=0; i<12; i++) {
+                canvasCtx.rotate(Math.PI / 6);
+                canvasCtx.fillRect(-12, -sunBaseRadius - 20, 24, 30);
+            }
+            canvasCtx.restore();
+
+            // Main Core
+            canvasCtx.fillStyle = '#facc15';
+            canvasCtx.beginPath();
+            canvasCtx.arc(0, 0, sunBaseRadius, 0, Math.PI * 2);
+            canvasCtx.fill();
+
+            // Happy Face (Perfect for Age 4-6)
+            canvasCtx.fillStyle = '#475569';
+            canvasCtx.beginPath(); // Left Eye
+            canvasCtx.arc(-16, -10, 6, 0, Math.PI * 2);
+            canvasCtx.arc(16, -10, 6, 0, Math.PI * 2); // Right Eye
+            canvasCtx.fill();
+            // Smiling Arc Mouth
+            canvasCtx.strokeStyle = '#475569';
+            canvasCtx.lineWidth = 5;
+            canvasCtx.lineCap = 'round';
+            canvasCtx.beginPath();
+            canvasCtx.arc(0, 5, 18, 0, Math.PI);
+            canvasCtx.stroke();
+            canvasCtx.restore();
+
+            // --- 3. Dynamic Vector Water Layers ---
+            let waterGrad = canvasCtx.createLinearGradient(0, waterBoundary, 0, height);
+            waterGrad.addColorStop(0, 'rgba(14, 116, 144, 0.85)');
+            waterGrad.addColorStop(1, 'rgba(12, 74, 110, 0.95)');
+            canvasCtx.fillStyle = waterGrad;
+            canvasCtx.fillRect(0, waterBoundary, width, height - waterBoundary);
+
+            // Animated stylized Wave Crest Line
+            canvasCtx.fillStyle = 'rgba(56, 189, 248, 0.4)';
+            canvasCtx.beginPath();
+            canvasCtx.moveTo(0, waterBoundary);
+            for(let x=0; x<=width; x+=20) {
+                let waveY = waterBoundary + Math.sin(x * 0.01 + sunPulse) * 6;
+                canvasCtx.lineTo(x, waveY);
+            }
+            canvasCtx.lineTo(width, height);
+            canvasCtx.lineTo(0, height);
+            canvasCtx.fill();
+        }
+
+        function THREE_linearInterpolate(start, end, amt){
+            return (1-amt)*start+amt*end;
+        }
+
+        // --- Core MediaPipe Tracking & Physics Processing Loop ---
+        function processInteractions(results) {
+            let width = canvasElement.width;
+            let height = canvasElement.height;
+            let currentFrameHands = [];
+
+            canvasCtx.clearRect(0, 0, width, height);
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                loadingScreen.style.opacity = 0;
+                setTimeout(() => loadingScreen.style.display = 'none', 500);
+
+                for (const landmarks of results.multiHandLandmarks) {
+                    // Normalize Wrist Position (Landmark 0) as primary tracker point
+                    let wristX = landmarks[0].x;
+                    let wristY = landmarks[0].y;
+                    currentFrameHands.push({x: wristX, y: wristY});
+
+                    let pixelX = wristX * width;
+                    let pixelY = wristY * height;
+
+                    // Compute Interactive Zone States
+                    if (wristY > CONFIG.waterLineY) {
+                        // --- WATER ZONE INTERACTIONS ---
+
+                        // 1. Splash Detection Engine via frame delta check
+                        let prevHand = previousHands.find(h => Math.abs(h.x - wristX) < 0.2);
+                        if(prevHand) {
+                            let velocity = Math.sqrt(Math.pow(wristX - prevHand.x, 2) + Math.pow(wristY - prevHand.y, 2));
+                            if(velocity > 0.04) { // Fast motion flag
+                                for(let k=0; k<3; k++) particleArray.push(new Particle(pixelX, pixelY, '#38bdf8'));
+                            }
+                        }
+
+                        // Magic Bubble Trails
+                        if(Math.random() > 0.7) {
+                            particleArray.push(new Particle(pixelX, pixelY, 'rgba(255,255,255,0.6)'));
+                        }
+
+                        // 2. Trash Clean-Up (Vacuum Logic Engine)
+                        trashArray.forEach((trash, index) => {
+                            let distance = Math.sqrt(Math.pow(trash.x - pixelX, 2) + Math.pow(trash.y - pixelY, 2));
+                            if (distance < CONFIG.vacuumRadius) {
+                                trash.isVacuumed = true;
+                                // Snap interpolations directly to tracking coordinate
+                                trash.x = THREE_linearInterpolate(trash.x, pixelX, 0.3);
+                                trash.y = THREE_linearInterpolate(trash.y, pixelY, 0.3);
+
+                                if(distance < 30) { // Captured flag
+                                    for(let p=0; p<15; p++) particleArray.push(new Particle(trash.x, trash.y, '#4ade80'));
+                                    trashCleanedCount++;
+                                    scoreVal.innerText = trashCleanedCount;
+                                    trashArray[index] = new Trash(); // Instant respawn system
+                                }
+                            }
+                        });
+
+                        // 3. Fish Tickling Detection Loop
+                        fishArray.forEach(fish => {
+                            let distance = Math.sqrt(Math.pow(fish.x - pixelX, 2) + Math.pow(fish.y - pixelY, 2));
+                            if(distance < CONFIG.tickleRadius && !fish.tickled) {
+                                fish.tickled = true;
+                                fish.speedX *= -1.2; // Dart off actively in opposing vector direction
+                                for(let b=0; b<5; b++) particleArray.push(new Particle(fish.x, fish.y, '#e0f2fe'));
+                            }
+                        });
+
+                    } else {
+                        // --- SKY ZONE INTERACTION EXTENSION ---
+                        // Rainbow structural checking
+                        if(results.multiHandLandmarks.length >= 2) {
+                            let h1 = results.multiHandLandmarks[0][0];
+                            let h2 = results.multiHandLandmarks[1][0];
+                            if(h1.y < CONFIG.waterLineY && h2.y < CONFIG.waterLineY) {
+                                drawRainbowBridge();
+                            }
+                        }
+                    }
+                }
+            }
+
+            previousHands = currentFrameHands;
+
+            // Render Dynamic Ambient and Reactive Scenes
+            drawEcosystemEnvironment(currentFrameHands);
+
+            // Update & Render Environmental Entities Loops
+            fishArray.forEach(fish => { fish.update(); fish.draw(); });
+            trashArray.forEach(trash => { trash.update(); trash.draw(); });
+            
+            particleArray.forEach((particle, index) => {
+                particle.update();
+                particle.draw();
+                if(particle.alpha <= 0) particleArray.splice(index, 1);
+            });
+
+            // Draw Custom Bright Interactive Hand Overlays
+            currentFrameHands.forEach(hand => {
+                canvasCtx.fillStyle = hand.y > CONFIG.waterLineY ? 'rgba(56, 189, 248, 0.6)' : 'rgba(250, 204, 21, 0.7)';
+                canvasCtx.beginPath();
+                canvasCtx.arc(hand.x * width, hand.y * height, 22, 0, Math.PI * 2);
+                canvasCtx.fill();
+                canvasCtx.strokeStyle = '#ffffff';
+                canvasCtx.lineWidth = 3;
+                canvasCtx.stroke();
+            });
+        }
+
+        function drawRainbowBridge() {
+            canvasCtx.save();
+            let colors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#6366f1', '#a855f7'];
+            canvasCtx.lineWidth = 8;
+            canvasCtx.shadowBlur = 15;
+            canvasCtx.shadowColor = 'rgba(255,255,255,0.5)';
+            
+            colors.forEach((color, i) => {
+                canvasCtx.strokeStyle = color;
+                canvasCtx.beginPath();
+                canvasCtx.arc(canvasElement.width / 2, canvasElement.height * CONFIG.waterLineY, 250 + (i * 8), Math.PI, 0, false);
+                canvasCtx.stroke();
+            });
+            canvasCtx.restore();
+        }
+
+        // --- MediaPipe Pipeline Setup configuration ---
+        const hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+
+        hands.setOptions({
+            maxNumHands: 3,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        hands.onResults(processInteractions);
+
+        const camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({ image: videoElement });
+            },
+            width: 640,
+            height: 480
+        });
+
+        // Safe Window Resize Rescale Hook
+        window.addEventListener('resize', () => {
+            canvasElement.width = window.innerWidth;
+            canvasElement.height = window.innerHeight;
+        });
+
+        // Initialize and trigger camera device setup loop
+        initEnvironment();
+        camera.start().catch(err => {
+            alert("Camera access is blocked or un-supported. Please allow webcam permissions to play.");
+            console.error(err);
+        });
+    </script>
+</body>
+</html>
