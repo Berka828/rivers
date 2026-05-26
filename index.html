@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Gentle Playroom - Sensory Magic</title>
+    <title>Gentle Playroom - A World of Interaction</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
         canvas { display: block; position: absolute; top: 0; left: 0; z-index: 1; }
@@ -11,9 +11,7 @@
         button { padding: 20px 50px; font-size: 20px; cursor: pointer; letter-spacing: 1px; background-color: #3498db; color: white; border: none; border-radius: 50px; box-shadow: 0 4px 10px rgba(52, 152, 219, 0.3); transition: 0.3s; }
         button:hover { background-color: #2980b9; transform: scale(1.05); }
         #log { margin-top: 20px; font-family: monospace; color: #888; }
-        .dg.ac { z-index: 50 !important; transition: opacity 0.3s; }
-        body.fullscreen .dg.ac { opacity: 0; pointer-events: none; }
-        body.fullscreen #ui { display: none !important; }
+        .dg.ac { z-index: 50 !important; }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.9/dat.gui.min.js"></script>
 </head>
@@ -29,57 +27,52 @@
     <video id="webcam" playsinline autoplay muted></video>
 
     <script>
-        var log = document.getElementById('log'), video = document.getElementById('webcam'), canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d');
+        const log = document.getElementById('log'), video = document.getElementById('webcam'), canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d');
 
-        var backgroundImg = new Image();
-        var backgroundReady = false, imageLoadError = false;
+        const backgroundImg = new Image();
+        let backgroundReady = false, imageLoadError = false;
         backgroundImg.onload = () => { backgroundReady = true; };
         backgroundImg.onerror = () => { imageLoadError = true; };
-        backgroundImg.src = 'Gemini_Generated_Image_46zqy246zqy246zq.png'; // Use the new background image
+        backgroundImg.src = 'Gemini_Generated_Image_46zqy246zqy246zq.png';
 
-        var objects = [], motionPoints = [], popExplosions = [], ripples = [], splashes = [];
-        var animals = [], trashItems = [], vacuumParticles = [];
-        var interactiveAnimals = []; // --- NEW: Separate array for interactive creatures
+        let objects = [], motionPoints = [], popExplosions = [], ripples = [], trashItems = [], vacuumParticles = [];
         
-        var lastFrame = null, engineBooted = false, activeInteractionMode = 'Launch'; 
-        var modeNotification = { text: '', life: 0 }; 
+        const sun = { x: 0, y: 0, radius: 0, animation: 0 };
+        const rainbow = { active: false, opacity: 0, path: null };
+        let handsUpTimer = 0;
+        let lastFrame = null, engineBooted = false;
+        let audioCtx;
 
-        var audioCtx;
-        var pentatonicScale = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33]; 
-
-        var magicMeter = 0, displayMagicMeter = 0, magicEventActive = false, magicEventTimer = 0;
-        var confetti = [], sonicRings = []; 
-        var bxcmHues = [280, 30, 190, 90, 330];
-
-        var settings = {
-            interactionMode: 'Random', 
-            objectCount: 10,
-            animalCount: 15, 
-            interactiveAnimalCount: 5, // --- NEW: Customizable count for interactive creatures
+        const settings = {
+            motionSensitivity: 40,
+            balloonCount: 8,
+            lilyPadCount: 10,
             trashCount: 10,
-            floorLevel: 0.7, // Adjusted for the new background's water level
-            magicFillSpeed: 1.0,    
+            floorLevel: 0.7, 
             soundEnabled: true,     
-            gravity: 0.15, 
-            kickPower: 8,
-            cameraAlpha: 0.15, 
-            cameraBlur: 4,
-            indicatorColor: '#ffffff', 
-            indicatorSize: 30,
-            showMagicMeter: false
+            gravity: 0.1, 
+            cameraAlpha: 0.1, 
+            cameraBlur: 5,
         };
 
         function initAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx.state === 'suspended') audioCtx.resume(); }
-        function playChime(playbackRate = 1.0) { if (!settings.soundEnabled || !audioCtx) return; var freq = pentatonicScale[Math.floor(Math.random() * pentatonicScale.length)]; var osc = audioCtx.createOscillator(), gainNode = audioCtx.createGain(); osc.type = 'sine'; osc.frequency.setValueAtTime(freq, audioCtx.currentTime); osc.playbackRate.setValueAtTime(playbackRate, audioCtx.currentTime); gainNode.gain.setValueAtTime(0, audioCtx.currentTime); gainNode.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + 0.05); gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.5); osc.connect(gainNode); gainNode.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 1.5); }
-        function playVacuumSound() { if (!settings.soundEnabled || !audioCtx) return; let osc = audioCtx.createOscillator(), gainNode = audioCtx.createGain(); osc.type = 'sawtooth'; osc.frequency.setValueAtTime(80, audioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(400, audioCtx.currentTime + 0.3); gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime); gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4); osc.connect(gainNode); gainNode.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 0.4); }
-        function addMagic(amount) { if (magicEventActive) return; magicMeter = Math.min(100, magicMeter + amount * settings.magicFillSpeed); }
-        function createWaterRipple(x, y) { ripples.push({x: x, y: y, radius: 10, life: 1.0, hue: 200}); playChime(1.5); }
+        function playSound(freq, duration = 0.5, type = 'sine', playbackRate = 1.0) {
+            if (!settings.soundEnabled || !audioCtx) return;
+            const osc = audioCtx.createOscillator(), gainNode = audioCtx.createGain();
+            osc.type = type; osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            osc.playbackRate.setValueAtTime(playbackRate, audioCtx.currentTime);
+            gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+            gainNode.gain.linearRampToValueAtTime(0.2, audioCtx.currentTime + 0.02); 
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration); 
+            osc.connect(gainNode); gainNode.connect(audioCtx.destination);
+            osc.start(); osc.stop(audioCtx.currentTime + duration);
+        }
 
         function startApp() {
             log.innerText = "Initializing sensory sensors..."; initAudio(); 
             navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
                 video.srcObject = stream; video.play().catch(()=>{});
-                var checkInterval = setInterval(() => {
+                const checkInterval = setInterval(() => {
                     if (video.videoWidth > 0 && !engineBooted) { clearInterval(checkInterval); engineBooted = true; document.getElementById('ui').style.display = 'none'; initGame(); }
                 }, 100);
             }).catch(err => { log.innerText = "Error: " + err.name; });
@@ -87,161 +80,142 @@
 
         function initGame() {
             try {
-                var gui = new dat.GUI();
-                var mainFolder = gui.addFolder('Main Gameplay');
-                mainFolder.add(settings, 'objectCount', 0, 40).name('Floating Objects').onFinishChange(resetObjects);
-                mainFolder.add(settings, 'animalCount', 0, 50).name('Ambient Fish').onFinishChange(resetAnimals);
-                mainFolder.add(settings, 'interactiveAnimalCount', 0, 15).name('Interactive Animals').onFinishChange(resetInteractiveAnimals); // --- NEW
+                const gui = new dat.GUI();
+                const mainFolder = gui.addFolder('Main Gameplay');
+                mainFolder.add(settings, 'motionSensitivity', 10, 100).name('Motion Sensitivity');
+                mainFolder.add(settings, 'balloonCount', 0, 20).name('Balloons').onFinishChange(resetObjects);
+                mainFolder.add(settings, 'lilyPadCount', 0, 20).name('Lily Pads').onFinishChange(resetObjects);
                 mainFolder.add(settings, 'trashCount', 0, 30).name('Trash Items').onFinishChange(resetTrash);
-                mainFolder.add(settings, 'floorLevel', 0.5, 1.0).name('Water Level');
+                mainFolder.add(settings, 'floorLevel', 0.5, 0.9).name('Water Level');
                 mainFolder.add(settings, 'soundEnabled').name('Sound ON/OFF');
                 mainFolder.open();
-                var magicFolder = gui.addFolder('Magic & Physics');
-                magicFolder.add(settings, 'magicFillSpeed', 0.1, 5.0).name('Fill Speed');
-                magicFolder.add(settings, 'gravity', 0.05, 0.5).name('Gravity');
-                magicFolder.add(settings, 'showMagicMeter').name('Show Meter');
-                var mirrorFolder = gui.addFolder('Camera Mirror');
+                const mirrorFolder = gui.addFolder('Camera Mirror');
                 mirrorFolder.add(settings, 'cameraAlpha', 0, 1).name('Visibility');
                 mirrorFolder.add(settings, 'cameraBlur', 0, 20).name('Softness');
             } catch(e) {}
             resizeCanvas(); window.addEventListener('resize', resizeCanvas);
-            resetObjects(); resetAnimals(); resetTrash(); resetInteractiveAnimals(); // --- NEW
+            resetObjects(); resetTrash();
             trackMotion(); gameLoop();
         }
 
         function trackMotion() {
-            var mCanvas = document.createElement('canvas'); var mCtx = mCanvas.getContext('2d', { willReadFrequently: true });
-            mCanvas.width = 64; mCanvas.height = 48;
+            const mCanvas = document.createElement('canvas'), mCtx = mCanvas.getContext('2d', { willReadFrequently: true });
+            const W = 128, H = 96;
+            mCanvas.width = W; mCanvas.height = H;
+            
             function scan() {
-                if (video.readyState < 3) { setTimeout(scan, 100); return; }
-                mCtx.drawImage(video, 0, 0, 64, 48);
-                var current = mCtx.getImageData(0, 0, 64, 48).data;
-                motionPoints = []; 
-                if (lastFrame) {
-                    let rawMotion = [];
-                    for (var i = 0; i < current.length; i += 4) { if (Math.abs(current[i] - lastFrame[i]) > 45) rawMotion.push({ x: (1 - (((i/4) % 64) / 64)) * canvas.width, y: (Math.floor(i/4/64))/48 * canvas.height }); }
-                    if (rawMotion.length > 0) {
-                        let topPt=rawMotion[0], bottomPt=rawMotion[0], leftPt=rawMotion[0], rightPt=rawMotion[0];
-                        rawMotion.forEach(p => { if (p.y<topPt.y)topPt=p; if(p.y>bottomPt.y)bottomPt=p; if(p.x<leftPt.x)leftPt=p; if(p.x>rightPt.x)rightPt=p; });
-                        motionPoints.push(topPt, bottomPt, leftPt, rightPt);
-                        motionPoints.forEach(pt => {
-                            const waterY = canvas.height * settings.floorLevel;
-                            if (pt.y > waterY - 30) { if(Math.random() > 0.95) createWaterRipple(pt.x, waterY); }
-                            
-                            // --- NEW: Interactive Animal Logic ---
-                            interactiveAnimals.forEach(animal => {
-                                if (Math.sqrt(Math.pow(animal.x - pt.x, 2) + Math.pow(animal.y - pt.y, 2)) < 40) {
-                                    if(animal.type === 'starfish' && !animal.isAnimating) { animal.isAnimating = true; playChime(2.0); }
-                                    if(animal.type === 'crab' && !animal.isFleeing) { animal.isFleeing = true; playChime(0.5); }
-                                }
-                            });
-
-                            trashItems.forEach((trash) => {
-                                if (!trash.active) return;
-                                if (Math.sqrt(Math.pow(trash.x - pt.x, 2) + Math.pow(trash.y - pt.y, 2)) < 40) { trash.active = false; createVacuumEffect(trash.x, trash.y, pt); playVacuumSound(); addMagic(10); }
-                            });
-                        });
+                try {
+                    if (video.readyState < 3) return;
+                    mCtx.drawImage(video, 0, 0, W, H);
+                    const current = mCtx.getImageData(0, 0, W, H).data;
+                    
+                    if (lastFrame) {
+                        motionPoints = [];
+                        for (let i = 0; i < current.length; i += 4) {
+                            if (Math.abs(current[i] - lastFrame[i]) > settings.motionSensitivity) {
+                                motionPoints.push({
+                                    x: (1 - ((i / 4) % W) / W) * canvas.width,
+                                    y: (Math.floor((i / 4) / W) / H) * canvas.height
+                                });
+                            }
+                        }
+                        if (motionPoints.length > 2) {
+                            let topPt = motionPoints[0], rightPt = motionPoints[0], leftPt = motionPoints[0];
+                            motionPoints.forEach(p => { if (p.y < topPt.y) topPt = p; if (p.x > rightPt.x) rightPt = p; if (p.x < leftPt.x) leftPt = p; });
+                            const handsUpThreshold = canvas.height * 0.4, handsApartThreshold = canvas.width * 0.3;
+                            if (leftPt.y < handsUpThreshold && rightPt.y < handsUpThreshold && Math.abs(leftPt.x - rightPt.x) > handsApartThreshold) {
+                                handsUpTimer++;
+                                if (handsUpTimer > 240 && !rainbow.active) { rainbow.active = true; rainbow.opacity = 0; }
+                            } else {
+                                handsUpTimer = 0;
+                            }
+                        }
                     }
+                    lastFrame = new Uint8ClampedArray(current);
+                } catch (e) {
+                    console.error("Motion tracking error:", e);
+                } finally {
+                    setTimeout(scan, 66); // Ensure the loop always continues
                 }
-                lastFrame = new Uint8ClampedArray(current);
-                setTimeout(scan, 60);
             }
             scan();
+        }
+        
+        function handleInteractions() {
+            if (motionPoints.length === 0) return;
+            const waterY = canvas.height * settings.floorLevel;
+            motionPoints.forEach(pt => {
+                if (pt.y > waterY && Math.random() > 0.95) createWaterRipple(pt.x, waterY);
+
+                if (Math.sqrt(Math.pow(sun.x - pt.x, 2) + Math.pow(sun.y - pt.y, 2)) < sun.radius) {
+                    if (sun.animation <= 0) { sun.animation = 1.0; playSound(440); }
+                }
+
+                objects.forEach((obj) => {
+                    const dist = Math.sqrt(Math.pow(obj.x - pt.x, 2) + Math.pow(obj.y - pt.y, 2));
+                    if (dist < obj.radius + 15) {
+                        switch(obj.type) {
+                            case 'balloon': if(obj.active){ obj.active = false; createPopExplosion(obj.x, obj.y, obj.hue); playSound(550, 0.3, 'triangle'); } break;
+                            case 'lilypad': if(Math.random() > 0.8) createWaterRipple(obj.x, obj.y); break;
+                        }
+                    }
+                });
+
+                trashItems.forEach((trash) => {
+                    if (trash.active && Math.sqrt(Math.pow(trash.x - pt.x, 2) + Math.pow(trash.y - pt.y, 2)) < trash.size + 20) {
+                        trash.active = false; createVacuumEffect(trash.x, trash.y, pt); playSound(100, 0.4, 'sawtooth');
+                    }
+                });
+            });
         }
 
         function gameLoop() {
             requestAnimationFrame(gameLoop);
-            
             if (backgroundReady) { ctx.drawImage(backgroundImg, 0, 0, canvas.width, canvas.height); } 
-            else {
-                ctx.fillStyle = '#87CEEB'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-                if (imageLoadError) {
-                    ctx.fillStyle = 'red'; ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'center';
-                    ctx.fillText("Error: Background image not found.", canvas.width / 2, canvas.height / 2);
-                    ctx.fillText("Please make sure 'Gemini_Generated_Image_46zqy246zqy246zq.png' is in the same folder.", canvas.width / 2, canvas.height / 2 + 30);
-                }
-            }
+            else { ctx.fillStyle = '#87CEEB'; ctx.fillRect(0, 0, canvas.width, canvas.height); if (imageLoadError) { ctx.fillStyle = 'red'; ctx.font='bold 20px sans-serif'; ctx.textAlign='center'; ctx.fillText("Error: Background image not found.", canvas.width/2, canvas.height/2); }}
 
+            handleInteractions();
+            updateAndDrawAll();
+            
             drawMirroredCamera();
-            drawAndUpdateAnimals();
-            drawAndUpdateInteractiveAnimals(); // --- NEW
-            drawAndUpdateTrash();
-            drawAndUpdateVacuum();
-            drawAndUpdateRipples();
-            if (settings.showMagicMeter) drawMagicMeter();
             drawTouchIndicators();
         }
 
-        function drawMagicMeter(){var barWidth=30;var barHeight=canvas.height*0.5;var x=40;var y=(canvas.height/2)-(barHeight/2);displayMagicMeter+=(magicMeter-displayMagicMeter)*0.05;ctx.fillStyle='rgba(40,40,40,0.4)';ctx.fillRect(x,y,barWidth,barHeight);var fillHeight=(displayMagicMeter/100)*barHeight;var fillY=y+barHeight-fillHeight;var grad=ctx.createLinearGradient(x,y+barHeight,x,y);grad.addColorStop(0,'#ff4444');grad.addColorStop(0.5,'#ffeb3b');grad.addColorStop(1,'#00C851');ctx.save();ctx.fillStyle=grad;ctx.fillRect(x,fillY,barWidth,fillHeight);ctx.restore();ctx.strokeStyle='rgba(255,255,255,0.9)';ctx.lineWidth=4;ctx.strokeRect(x,y,barWidth,barHeight)}
-        function drawAndUpdateRipples(){for(let i=ripples.length-1;i>=0;i--){let r=ripples[i];r.radius+=1.5;r.life-=0.02;if(r.life<=0)ripples.splice(i,1);else{ctx.strokeStyle=`hsla(${r.hue},80%,90%,${r.life*0.7})`;ctx.lineWidth=3;ctx.beginPath();ctx.arc(r.x,r.y,r.radius,0,2*Math.PI);ctx.stroke()}}}
-        function resetTrash(){trashItems=[];for(let i=0;i<settings.trashCount;i++)trashItems.push(createTrash())}
+        function updateAndDrawAll() {
+            const waterY = canvas.height * settings.floorLevel;
+            updateSun(); drawSun();
+            drawAndUpdateRainbow();
+            
+            objects.forEach((obj, i) => { if (obj.remove) objects.splice(i, 1); else obj.update(waterY); obj.draw(); });
+            if (objects.length < settings.balloonCount + settings.lilyPadCount) resetObjects();
 
-        // --- UPDATED: Trash drawing ---
-        function createTrash(x,y){ const waterYStart=canvas.height*settings.floorLevel;const waterHeight=canvas.height-waterYStart;const types=['bottle','can','bag'];return{type:types[Math.floor(Math.random()*types.length)],x:x||Math.random()*canvas.width,y:y||waterYStart+Math.random()*waterHeight*0.9,vx:(Math.random()-0.5)*0.3,size:Math.random()*15+20,phase:Math.random()*Math.PI*2,rotation:Math.random()*Math.PI*2,rotationSpeed:(Math.random()-0.5)*0.01,active:true,scale:1}}
-        function drawAndUpdateTrash(){ const waterYStart=canvas.height*settings.floorLevel;for(let i=trashItems.length-1;i>=0;i--){if(!trashItems[i].active&&trashItems[i].scale<=0){trashItems.splice(i,1);trashItems.push(createTrash(Math.random()>0.5?-50:canvas.width+50))}}trashItems.forEach(t=>{if(t.active){t.x+=t.vx;t.y+=Math.sin(t.phase)*0.1;t.phase+=0.02;t.rotation+=t.rotationSpeed;if(t.x>canvas.width+50)t.x=-40;if(t.x<-50)t.x=canvas.width+40;if(t.y<waterYStart)t.y=waterYStart}else{t.scale=Math.max(0,t.scale-0.05)}ctx.save();ctx.translate(t.x,t.y);ctx.rotate(t.rotation);ctx.scale(t.scale,t.scale);ctx.globalAlpha=0.8;ctx.lineWidth=2;switch(t.type){case'bottle':ctx.fillStyle='#90EE90';ctx.strokeStyle='#3CB371';ctx.fillRect(-t.size*0.4,-t.size,t.size*0.8,t.size*2);ctx.strokeRect(-t.size*0.4,-t.size,t.size*0.8,t.size*2);break;case'can':ctx.fillStyle='#C0C0C0';ctx.strokeStyle='#808080';ctx.beginPath();ctx.ellipse(0,0,t.size*0.6,t.size,0,0,Math.PI*2);ctx.fill();ctx.stroke();break;case'bag':ctx.fillStyle='#F5F5DC';ctx.strokeStyle='#D2B48C';ctx.beginPath();ctx.moveTo(-t.size,-t.size);ctx.quadraticCurveTo(0,0,t.size,-t.size);ctx.quadraticCurveTo(t.size*0.2,t.size*1.2,-t.size,-t.size);ctx.fill();ctx.stroke();break}ctx.restore()})}
-        function createVacuumEffect(x,y,target){for(let i=0;i<40;i++){let angle=Math.random()*Math.PI*2;let dist=Math.random()*30+10;vacuumParticles.push({x:x+Math.cos(angle)*dist,y:y+Math.sin(angle)*dist,life:1,target:target})}}
-        function drawAndUpdateVacuum(){for(let i=vacuumParticles.length-1;i>=0;i--){let p=vacuumParticles[i];p.x+=(p.target.x-p.x)*0.15;p.y+=(p.target.y-p.y)*0.15;p.life-=0.04;if(p.life<=0){vacuumParticles.splice(i,1)}else{ctx.fillStyle=`rgba(255,255,255,${p.life*0.8})`;ctx.beginPath();ctx.arc(p.x,p.y,p.life*3,0,Math.PI*2);ctx.fill()}}}
-        function resetAnimals(){animals=[];for(let i=0;i<settings.animalCount;i++)animals.push(createAnimal())}
-        function createAnimal(){const waterYStart=canvas.height*settings.floorLevel;const waterHeight=canvas.height-waterYStart;let animal={x:Math.random()*canvas.width,y:waterYStart+waterHeight*0.2+Math.random()*waterHeight*0.7,vx:(Math.random()-0.5)*1.5+0.5,size:Math.random()*15+10,color:`hsl(${Math.random()*360},50%,70%)`,phase:Math.random()*Math.PI*2};return animal}
-        function drawAndUpdateAnimals(){const waterYStart=canvas.height*settings.floorLevel;animals.forEach(a=>{a.x+=a.vx;a.phase+=0.05;if(a.x>canvas.width+a.size*5)a.x=-a.size*4;if(a.x<-a.size*5)a.x=canvas.width+a.size*4;a.y+=Math.sin(a.phase)*0.2;if(a.y<waterYStart)a.y=waterYStart+5;ctx.save();ctx.translate(a.x,a.y);if(a.vx<0)ctx.scale(-1,1);drawFish(a);ctx.restore()})}
-        function drawFish(a){ctx.fillStyle=a.color;ctx.globalAlpha=0.7;ctx.beginPath();ctx.ellipse(0,0,a.size,a.size*0.5,0,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.moveTo(-a.size,0);ctx.lineTo(-a.size*1.5,-a.size*0.4);ctx.lineTo(-a.size*1.5,a.size*0.4);ctx.closePath();ctx.fill()}
+            trashItems.forEach((t, i) => { if (!t.active && t.scale <= 0) { trashItems.splice(i,1); trashItems.push(createTrash()); } else { updateTrash(t); drawTrash(t); } });
+            
+            ripples.forEach((r, i) => { r.radius += 1.5; r.life -= 0.02; if (r.life <= 0) ripples.splice(i, 1); else drawRipple(r); });
+            popExplosions.forEach((p, i) => { p.vy += 0.1; p.x += p.vx; p.y += p.vy; p.life -= 0.04; if (p.life <= 0) popExplosions.splice(i, 1); else drawPopParticle(p); });
+            vacuumParticles.forEach((p, i) => { p.x += (p.target.x - p.x) * 0.15; p.y += (p.target.y - p.y) * 0.15; p.life -= 0.04; if (p.life <= 0) vacuumParticles.splice(i, 1); else { ctx.fillStyle = `rgba(255,255,255,${p.life*0.8})`; ctx.beginPath(); ctx.arc(p.x,p.y,p.life*3,0,Math.PI*2); ctx.fill(); }});
+        }
         
-        // --- NEW: INTERACTIVE ANIMAL FUNCTIONS ---
-        function resetInteractiveAnimals() { interactiveAnimals = []; for(let i=0; i<settings.interactiveAnimalCount; i++) interactiveAnimals.push(createInteractiveAnimal()); }
-        function createInteractiveAnimal() {
-            const waterYStart = canvas.height * settings.floorLevel;
-            const type = Math.random() > 0.5 ? 'starfish' : 'crab';
-            let animal = { type, x: Math.random() * canvas.width, y: waterYStart + (Math.random() * (canvas.height-waterYStart-40)) + 20, size: Math.random() * 15 + 15 };
-            if(type === 'starfish') { animal.isAnimating = false; animal.animProgress = 0; animal.y = canvas.height - animal.size - 10; }
-            if(type === 'crab') { animal.isFleeing = false; animal.vx = (Math.random() > 0.5 ? 1 : -1) * 0.5; animal.y = canvas.height - animal.size; }
-            return animal;
-        }
-        function drawAndUpdateInteractiveAnimals() {
-            for(let i = interactiveAnimals.length - 1; i >= 0; i--) {
-                let a = interactiveAnimals[i];
-                if (a.type === 'crab') {
-                    if(a.isFleeing) a.vx *= 1.15; else a.vx = Math.sign(a.vx) * 0.5;
-                    a.x += a.vx;
-                    if(a.x < -50 || a.x > canvas.width + 50) interactiveAnimals.splice(i, 1);
-                }
-                if (a.type === 'starfish' && a.isAnimating) {
-                    a.animProgress += 0.05;
-                    if(a.animProgress >= 1) { a.isAnimating = false; a.animProgress = 0; }
-                }
-                ctx.save(); ctx.translate(a.x, a.y);
-                if(a.type === 'starfish') drawStarfish(a);
-                if(a.type === 'crab') drawCrab(a);
-                ctx.restore();
-            }
-             while(interactiveAnimals.length < settings.interactiveAnimalCount) interactiveAnimals.push(createInteractiveAnimal());
-        }
-        function drawStarfish(a) {
-            ctx.fillStyle = '#FFC0CB'; ctx.strokeStyle = '#FF69B4'; ctx.lineWidth = 3;
-            if(a.isAnimating) { 
-                ctx.rotate(Math.sin(a.animProgress * Math.PI) * 0.5); 
-                const glow = ctx.createRadialGradient(0,0,0,0,0,a.size * 2);
-                glow.addColorStop(0, 'rgba(255,255,100,0.8)'); glow.addColorStop(1, 'rgba(255,255,100,0)');
-                ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(0,0,a.size * 2,0,Math.PI*2); ctx.fill();
-            }
-            ctx.beginPath();
-            for(let i=0; i<5; i++) { let rot = i * Math.PI * 0.4; ctx.lineTo(Math.cos(rot)*a.size, Math.sin(rot)*a.size); rot += Math.PI * 0.2; ctx.lineTo(Math.cos(rot)*a.size*0.4, Math.sin(rot)*a.size*0.4); }
-            ctx.closePath(); ctx.fillStyle = '#FFC0CB'; ctx.fill(); ctx.stroke();
-        }
-        function drawCrab(a) {
-             ctx.fillStyle = '#FF4500'; ctx.strokeStyle = '#8B0000'; ctx.lineWidth = 2;
-             // Body
-             ctx.beginPath(); ctx.ellipse(0, 0, a.size, a.size * 0.7, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-             // Legs
-             for(let i=0; i<6; i++) { let side = i < 3 ? -1 : 1; let angle = (i % 3) * 0.5 + 0.3; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(side * a.size * 0.8, (angle-0.8)*a.size); ctx.stroke(); }
-        }
-
-        // --- CORE UTILITY FUNCTIONS ---
-        function resetObjects(){objects=[];for(var i=0;i<settings.objectCount;i++)objects.push(createObject())}
-        function createObject(){return{type:'ball',x:Math.random()*canvas.width,y:Math.random()*canvas.height*0.5,vx:(Math.random()-0.5)*2,vy:(Math.random()-0.5)*2,radius:Math.random()*15+20,colorHue:Math.floor(Math.random()*360)}}
-        function drawMirroredCamera(){ctx.save();ctx.globalAlpha=settings.cameraAlpha;ctx.filter=`blur(${settings.cameraBlur}px)`;ctx.scale(-1,1);ctx.translate(-canvas.width,0);if(video.readyState>=3)ctx.drawImage(video,0,0,canvas.width,canvas.height);ctx.restore()}
-        function drawTouchIndicators(){motionPoints.forEach(p=>{var grad=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,settings.indicatorSize*1.5);grad.addColorStop(0,settings.indicatorColor+'66');grad.addColorStop(1,settings.indicatorColor+'00');ctx.fillStyle=grad;ctx.beginPath();ctx.arc(p.x,p.y,settings.indicatorSize*1.5,0,2*Math.PI);ctx.fill()})}
-        function resizeCanvas(){canvas.width=window.innerWidth;canvas.height=window.innerHeight}
-        document.addEventListener('keydown',e=>{if(e.key.toLowerCase()==='f'){if(!document.fullscreenElement)document.documentElement.requestFullscreen();else document.exitFullscreen()}});
+        function resetObjects() { objects = []; for (let i=0; i<settings.balloonCount; i++) objects.push(createBalloon()); for (let i=0; i<settings.lilyPadCount; i++) objects.push(createLilyPad()); }
+        function createBalloon() { let size = Math.random()*20+25; return { type: 'balloon', x: Math.random()*canvas.width, y: canvas.height+size, radius: size, vx: (Math.random()-0.5)*0.5, vy: -Math.random()*0.8-0.2, hue: Math.random()*360, active: true, remove: false, update: function(){ if(this.active){this.x+=this.vx;this.y+=this.vy;}else{this.radius*=0.9; if(this.radius<1)this.remove=true;} if(this.y<-this.radius)this.remove=true; }, draw: function(){ ctx.save(); ctx.translate(this.x,this.y); ctx.fillStyle=`hsla(${this.hue}, 80%, 70%, 0.8)`; ctx.strokeStyle=`hsla(${this.hue}, 80%, 50%, 0.9)`; ctx.lineWidth=2; ctx.beginPath(); ctx.ellipse(0,0,this.radius*0.8,this.radius,0,0,Math.PI*2); ctx.fill();ctx.stroke(); ctx.restore(); } }; }
+        function createLilyPad() { const waterY=canvas.height*settings.floorLevel; let size=Math.random()*25+20; return { type: 'lilypad', x: Math.random()*canvas.width, y: waterY+Math.random()*20-10, radius: size, remove: false, update: function(){}, draw: function(){ ctx.fillStyle='#2E8B57';ctx.strokeStyle='#006400';ctx.lineWidth=2; ctx.beginPath();ctx.ellipse(this.x,this.y,this.radius,this.radius*0.7,0,0.3,Math.PI*2-0.3); ctx.closePath();ctx.fill();ctx.stroke(); } }; }
+        
+        function resetTrash(){ trashItems = []; for(let i=0; i<settings.trashCount; i++) trashItems.push(createTrash()); }
+        function createTrash(){ const waterY=canvas.height*settings.floorLevel; return { type: ['bottle','can','bag'][Math.floor(Math.random()*3)], x: Math.random()*canvas.width, y: waterY+Math.random()*(canvas.height-waterY), size: Math.random()*15+20, vx: (Math.random()-0.5)*0.3, phase: Math.random()*Math.PI*2, rotation: Math.random()*Math.PI*2, active: true, scale: 1.0 }; }
+        function updateTrash(t) { if(t.active) { t.x += t.vx; t.y += Math.sin(t.phase) * 0.1; t.phase += 0.02; if(t.x > canvas.width+50) t.x=-40; if(t.x < -50) t.x=canvas.width+40; } else { t.scale = Math.max(0, t.scale - 0.05); } }
+        function drawTrash(t) { ctx.save(); ctx.translate(t.x, t.y); ctx.rotate(t.rotation); ctx.scale(t.scale, t.scale); ctx.globalAlpha = 0.7; ctx.lineWidth = 2; switch(t.type) { case 'bottle': ctx.fillStyle='#B2DFDB'; ctx.strokeStyle='#4DB6AC'; ctx.fillRect(-t.size*0.4,-t.size,t.size*0.8,t.size*2); ctx.strokeRect(-t.size*0.4,-t.size,t.size*0.8,t.size*2); break; case 'can': ctx.fillStyle='#BDBDBD'; ctx.strokeStyle='#757575'; ctx.beginPath(); ctx.ellipse(0,0,t.size*0.6,t.size,0,0,Math.PI*2); ctx.fill(); ctx.stroke(); break; case 'bag': ctx.fillStyle='#E0E0E0'; ctx.strokeStyle='#9E9E9E'; ctx.beginPath(); ctx.moveTo(-t.size,-t.size); ctx.quadraticCurveTo(0,0,t.size,-t.size); ctx.quadraticCurveTo(t.size*0.2,t.size*1.2,-t.size,-t.size); ctx.fill(); ctx.stroke(); break; } ctx.restore(); }
+        
+        function updateSun() { sun.x = canvas.width * 0.85; sun.y = canvas.height * 0.15; sun.radius = Math.min(canvas.width, canvas.height) * 0.06; if (sun.animation > 0) sun.animation -= 0.05; }
+        function drawSun() { ctx.save(); ctx.translate(sun.x, sun.y); if (sun.animation > 0) { const rayLength = sun.radius*2.5, rayStart = sun.radius*1.1, rayOpacity = sun.animation*0.8; ctx.strokeStyle=`rgba(255,255,100,${rayOpacity})`; ctx.lineWidth=12*sun.animation+4; for(let i=0;i<8;i++){ let angle=i/8*Math.PI*2; ctx.rotate(angle);ctx.beginPath();ctx.moveTo(rayStart,0);ctx.lineTo(rayLength,0);ctx.stroke();ctx.rotate(-angle); }} ctx.restore(); }
+        function drawAndUpdateRainbow() { if(rainbow.active){if(rainbow.opacity<1.0)rainbow.opacity+=0.01;}else{if(rainbow.opacity>0)rainbow.opacity-=0.01;else return;} const waterY=canvas.height*settings.floorLevel; if(!rainbow.path){rainbow.path=new Path2D();let r=Math.min(canvas.width*0.6,canvas.height);rainbow.path.arc(canvas.width/2,waterY,r,Math.PI*1.05,Math.PI*1.95);} const colors=['#FF0000','#FF7F00','#FFFF00','#00FF00','#0000FF','#4B0082','#9400D3']; ctx.save();ctx.globalAlpha=rainbow.opacity*0.6;ctx.lineWidth=20;ctx.lineCap='round';for(let i=0;i<colors.length;i++){ctx.strokeStyle=colors[i];ctx.stroke(rainbow.path);ctx.lineWidth-=2.5;}ctx.restore(); if(rainbow.active&&handsUpTimer===0)rainbow.active=false;}
+        
+        function createPopExplosion(x,y,hue) { for (let i=0; i<30; i++) { let angle=(i/30)*2*Math.PI; popExplosions.push({x:x, y:y, vx:Math.cos(angle)*3, vy:Math.sin(angle)*3, life:1, hue:hue }); } }
+        function createVacuumEffect(x,y,target) { for (let i=0; i<40; i++) { let angle = Math.random()*Math.PI*2; vacuumParticles.push({x:x+Math.cos(angle)*30,y:y+Math.sin(angle)*30,life:1,target:target}); } }
+        function drawRipple(r) { ctx.strokeStyle=`hsla(${r.hue},80%,90%,${r.life*0.7})`; ctx.lineWidth=3; ctx.beginPath(); ctx.ellipse(r.x,r.y,r.radius,r.radius*0.4,0,0,2*Math.PI); ctx.stroke(); }
+        function drawPopParticle(p) { ctx.fillStyle = `hsla(${p.hue}, 80%, 70%, ${p.life})`; ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI*2); ctx.fill(); }
+        function drawMirroredCamera() { ctx.save(); ctx.globalAlpha = settings.cameraAlpha; ctx.filter=`blur(${settings.cameraBlur}px)`; ctx.scale(-1,1); ctx.translate(-canvas.width,0); if (video.readyState >= 3) ctx.drawImage(video, 0, 0, canvas.width, canvas.height); ctx.restore(); }
+        function drawTouchIndicators() { if (motionPoints.length === 0) return; ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(motionPoints[0].x, motionPoints[0].y); for(let i=1; i<motionPoints.length; i+=Math.floor(motionPoints.length/50)+1) { ctx.lineTo(motionPoints[i].x, motionPoints[i].y); } ctx.stroke(); }
+        function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; rainbow.path = null; }
     </script>
 </body>
 </html>
