@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Gentle Playroom - Full Experience</title>
+    <title>Gentle Playroom - Full Experience (Stable)</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; }
         canvas { display: block; position: absolute; top: 0; left: 0; z-index: 1; }
@@ -20,6 +20,7 @@
         <h1 style="letter-spacing: 2px; font-weight: 300;">GENTLE PLAYROOM</h1>
         <p style="color: #666; margin-bottom: 30px;">A full, robust interactive experience.</p>
         <button onclick="startApp()">START EXPERIENCE</button>
+        <div id="log"></div>
     </div>
 
     <canvas id="gameCanvas"></canvas>
@@ -29,6 +30,7 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const video = document.getElementById('webcam');
+        const log = document.getElementById('log');
 
         const backgroundImg = new Image();
         let backgroundReady = false, imageLoadError = false;
@@ -71,12 +73,28 @@
             osc.start(); osc.stop(audioCtx.currentTime + duration);
         }
 
+        // --- ROBUST STARTUP SEQUENCE ---
         function startApp() {
-            log.innerText = "Initializing..."; initAudio();
-            navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
-                video.srcObject = stream; video.play();
-                const i = setInterval(() => { if (video.videoWidth) { clearInterval(i); engineBooted = true; document.getElementById('ui').style.display = 'none'; initGame(); } }, 100);
-            }).catch(err => { document.getElementById('ui').innerHTML = `<h1>Error</h1><p>Could not access webcam. Please grant permission and refresh.</p>`; });
+            log.innerText = "Initializing sensors...";
+            initAudio();
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(stream => {
+                    video.srcObject = stream;
+                    video.play().catch(e => console.error("Video play failed:", e));
+                    
+                    // This is the critical part: Wait for the video to actually start playing
+                    const checkInterval = setInterval(() => {
+                        if (video.readyState >= 3 && video.videoWidth > 0) {
+                            clearInterval(checkInterval);
+                            engineBooted = true;
+                            document.getElementById('ui').style.display = 'none';
+                            initGame();
+                        }
+                    }, 100);
+                })
+                .catch(err => {
+                    document.getElementById('ui').innerHTML = `<h1>Camera Error</h1><p>Could not access the webcam. Please ensure it's not in use by another app and that you have granted permission in your browser.</p><p><i>Error: ${err.name}</i></p>`;
+                });
         }
 
         function initGame() {
@@ -98,7 +116,8 @@
             } catch (e) {}
             resizeCanvas(); window.addEventListener('resize', resizeCanvas);
             resetAllObjects();
-            trackMotion(); gameLoop();
+            trackMotion();
+            gameLoop();
         }
 
         function trackMotion() {
@@ -106,7 +125,10 @@
             const W = 128, H = 96; mCanvas.width = W; mCanvas.height = H;
             function scan() {
                 try {
-                    if (video.readyState < 3) return;
+                    if (!engineBooted || video.readyState < 3) {
+                        requestAnimationFrame(scan);
+                        return;
+                    };
                     mCtx.drawImage(video, 0, 0, W, H);
                     const frameData = mCtx.getImageData(0, 0, W, H).data;
                     if (lastFrame) {
@@ -122,7 +144,7 @@
                         } else motionPoints = [];
                     }
                     lastFrame = new Uint8ClampedArray(frameData);
-                } catch(e) { console.error(e); } finally { requestAnimationFrame(scan); }
+                } catch(e) { console.error("Motion tracking error:", e); } finally { requestAnimationFrame(scan); }
             }
             scan();
         }
@@ -146,6 +168,8 @@
         
         function gameLoop() {
             requestAnimationFrame(gameLoop);
+            if (!engineBooted) return;
+            
             if (backgroundReady) { ctx.drawImage(backgroundImg, 0, 0, canvas.width, canvas.height); } 
             else { ctx.fillStyle = '#87CEEB'; ctx.fillRect(0, 0, canvas.width, canvas.height); if (imageLoadError) { ctx.fillStyle = 'red'; ctx.font='bold 20px sans-serif'; ctx.textAlign='center'; ctx.fillText("Error: Background image not found.", canvas.width/2, canvas.height/2); }}
             
@@ -153,7 +177,7 @@
             
             allObjects.forEach(obj => obj.update());
             allObjects = allObjects.filter(obj => !obj.remove);
-            while (allObjects.filter(o => o.isTrash).length < settings.trashCount) allObjects.push(createTrash());
+            if(allObjects.length < settings.balloonCount + settings.lilyPadCount + settings.trashCount + settings.interactiveAnimalCount) resetAllObjects();
             
             effects.forEach(eff => eff.update());
             effects = effects.filter(eff => eff.life > 0);
@@ -169,17 +193,17 @@
         function resetAllObjects() { allObjects = []; for (let i=0; i<settings.balloonCount; i++) allObjects.push(createBalloon()); for (let i=0; i<settings.lilyPadCount; i++) allObjects.push(createLilyPad()); for (let i=0; i<settings.trashCount; i++) allObjects.push(createTrash()); for (let i=0; i<settings.interactiveAnimalCount; i++) allObjects.push(createInteractiveAnimal()); }
         
         const baseObject = { update: function() { this.x += this.vx; this.y += this.vy; this.phase += 0.02; if(this.y < -this.radius || this.y > canvas.height + this.radius) this.remove = true; } };
-        function createBalloon() { const size=Math.random()*20+25; return { ...baseObject, type: 'balloon', x: Math.random()*canvas.width, y: canvas.height+size, radius: size, vx: (Math.random()-0.5)*0.5, vy: -Math.random()*0.8-0.2, hue: Math.random()*360, active: true, update: function() { if(this.active){ this.y += this.vy; this.x += this.vx; } else { this.radius *= 0.85; if(this.radius < 1) this.remove=true; } if(this.y < -this.radius) this.remove=true; }, draw: function(){ ctx.save(); ctx.translate(this.x, this.y); ctx.fillStyle=`hsla(${this.hue},80%,70%,0.8)`; ctx.strokeStyle=`hsla(${this.hue},80%,50%,0.9)`; ctx.lineWidth=2; ctx.beginPath(); ctx.ellipse(0,0,this.radius*0.8,this.radius,0,0,Math.PI*2); ctx.fill(); ctx.stroke(); ctx.restore(); } }; }
+        function createBalloon() { const size=Math.random()*20+25; return { ...baseObject, type: 'balloon', x: Math.random()*canvas.width, y: canvas.height+size, radius: size, vx: (Math.random()-0.5)*0.5, vy: -Math.random()*0.8-0.2, hue: Math.random()*360, active: true, update: function() { if(this.active){ this.y += this.vy; this.x += this.vx; } else { this.radius *= 0.85; if(this.radius < 1) this.remove=true; } if(this.y < -this.radius) this.remove=true; }, draw: function(){ ctx.save(); ctx.translate(this.x, this.y); ctx.fillStyle=`hsla(${this.hue},80%,70%,0.8)`; ctx.strokeStyle=`hsla(${this.hue},80%,50%,0.9)`; ctx.lineWidth=2; ctx.beginPath(); ctx.ellipse(0,0,this.radius*0.8,this.radius,0,0,Math.PI*2); ctx.fill();ctx.stroke(); ctx.restore(); } }; }
         function createLilyPad() { const size=Math.random()*25+20; return { type: 'lilypad', x: Math.random()*canvas.width, y: canvas.height*settings.floorLevel+Math.random()*20-10, radius: size, update: function(){}, draw: function(){ ctx.fillStyle='#2E8B57'; ctx.strokeStyle='#006400'; ctx.lineWidth=2; ctx.beginPath(); ctx.ellipse(this.x, this.y, this.radius, this.radius*0.7, 0, 0.3, Math.PI*2-0.3); ctx.closePath(); ctx.fill(); ctx.stroke(); } }; }
         function createTrash() { const waterY=canvas.height*settings.floorLevel; const size=Math.random()*15+20; return { ...baseObject, isTrash: true, type: ['bottle','can','bag'][Math.floor(Math.random()*3)], x: Math.random()*canvas.width, y: waterY+Math.random()*(canvas.height-waterY), radius: size, vx: (Math.random()-0.5)*0.3, vy: 0, phase: Math.random()*Math.PI*2, rotation: Math.random()*Math.PI*2, active: true, scale: 1, update: function() { if (this.active) { this.x+=this.vx; this.y+=Math.sin(this.phase)*0.1; this.phase+=0.02; } else { this.scale=Math.max(0,this.scale-0.05); if(this.scale==0)this.remove=true; } if(this.x > canvas.width+50)this.x=-40; if(this.x<-50)this.x=canvas.width+40; }, draw: function() { ctx.save(); ctx.translate(this.x,this.y); ctx.rotate(this.rotation); ctx.scale(this.scale,this.scale); ctx.globalAlpha=0.7; ctx.lineWidth=2; switch(this.type){ case 'bottle': ctx.fillStyle='#B2DFDB';ctx.strokeStyle='#4DB6AC';ctx.fillRect(-this.radius*0.4,-this.radius,this.radius*0.8,this.radius*2);ctx.strokeRect(-this.radius*0.4,-this.radius,this.radius*0.8,this.radius*2);break; case 'can': ctx.fillStyle='#BDBDBD';ctx.strokeStyle='#757575';ctx.beginPath();ctx.ellipse(0,0,this.radius*0.6,this.radius,0,0,Math.PI*2);ctx.fill();ctx.stroke();break; case 'bag': ctx.fillStyle='#E0E0E0';ctx.strokeStyle='#9E9E9E';ctx.beginPath();ctx.moveTo(-this.radius,-this.radius);ctx.quadraticCurveTo(0,0,this.radius,-this.radius);ctx.quadraticCurveTo(this.radius*0.2,this.radius*1.2,-this.radius,-this.radius);ctx.fill();ctx.stroke();break; } ctx.restore(); } }; }
-        function createInteractiveAnimal() { const waterY = canvas.height*settings.floorLevel; const type = Math.random()>0.5?'starfish':'crab'; const size=Math.random()*15+15; let animal = { type: type, x:Math.random()*canvas.width, y: waterY+Math.random()*(canvas.height-waterY-30)+15, radius:size, isAnimating:false, isFleeing:false, update:function(){ if(this.type==='crab'){if(this.isFleeing){this.x+=this.vx*3; if(this.x<-50||this.x>canvas.width+50)this.remove=true;}else{this.x+=this.vx; if(this.x<0||this.x>canvas.width)this.vx*=-1;}} else if(this.type==='starfish'&&this.isAnimating){this.animProgress+=0.05; if(this.animProgress>=1){this.isAnimating=false;this.animProgress=0;}} }, draw: function(){ ctx.save();ctx.translate(this.x,this.y); if(this.type==='starfish')drawStarfish(this); else if(this.type==='crab')drawCrab(this); ctx.restore(); }}; if(type==='starfish'){animal.y=canvas.height-size;animal.animProgress=0;}else{animal.vx=(Math.random()>0.5?1:-1)*0.5;} return animal; }
+        function createInteractiveAnimal() { const waterY = canvas.height*settings.floorLevel; const type = Math.random()>0.5?'starfish':'crab'; const size=Math.random()*15+15; let animal = { type: type, x:Math.random()*canvas.width, y: waterY+Math.random()*(canvas.height-waterY-30)+15, radius:size, isAnimating:false, isFleeing:false, update:function(){ if(this.type==='crab'){if(this.isFleeing){this.x+=this.vx*5; if(this.x<-50||this.x>canvas.width+50)this.remove=true;}else{this.x+=this.vx; if(this.x<0||this.x>canvas.width)this.vx*=-1;}} else if(this.type==='starfish'&&this.isAnimating){this.animProgress+=0.05; if(this.animProgress>=1){this.isAnimating=false;this.animProgress=0;}} }, draw: function(){ ctx.save();ctx.translate(this.x,this.y); if(this.type==='starfish')drawStarfish(this); else if(this.type==='crab')drawCrab(this); ctx.restore(); }}; if(type==='starfish'){animal.y=canvas.height-size;animal.animProgress=0;}else{animal.vx=(Math.random()>0.5?1:-1)*0.5;} return animal; }
         function drawStarfish(a){ctx.fillStyle='#FFC0CB';ctx.strokeStyle='#FF69B4';ctx.lineWidth=3;if(a.isAnimating){ctx.rotate(Math.sin(a.animProgress*Math.PI)*0.5);const glow=ctx.createRadialGradient(0,0,0,0,0,a.radius*2);glow.addColorStop(0,'rgba(255,255,100,0.8)');glow.addColorStop(1,'rgba(255,255,100,0)');ctx.fillStyle=glow;ctx.beginPath();ctx.arc(0,0,a.radius*2,0,Math.PI*2);ctx.fill();}ctx.beginPath();for(let i=0;i<5;i++){let rot=i*Math.PI*0.4;ctx.lineTo(Math.cos(rot)*a.radius,Math.sin(rot)*a.radius);rot+=Math.PI*0.2;ctx.lineTo(Math.cos(rot)*a.radius*0.4,Math.sin(rot)*a.radius*0.4);}ctx.closePath();ctx.fillStyle='#FFC0CB';ctx.fill();ctx.stroke();}
         function drawCrab(a){ctx.fillStyle='#FF4500';ctx.strokeStyle='#8B0000';ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(0,0,a.radius,a.radius*0.7,0,0,Math.PI*2);ctx.fill();ctx.stroke();for(let i=0;i<6;i++){let side=i<3?-1:1;let angle=(i%3)*0.5+0.3;ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(side*a.radius*0.8,(angle-0.8)*a.radius);ctx.stroke();}}
         
         function createEffect(updater, drawer, life=1.0) { return { life: life, update: function() { this.life -= 0.02; updater(this); }, draw: function() { drawer(this); } }; }
         function createRipple(x,y) { return createEffect(r => r.radius += 1.5, r => { ctx.strokeStyle=`hsla(195,80%,90%,${r.life*0.7})`; ctx.lineWidth=3; ctx.beginPath(); ctx.ellipse(r.x,r.y,r.radius,r.radius*0.4,0,0,2*Math.PI); ctx.stroke(); }); }
-        function createPop(x,y,hue) { let particles=[]; for(let i=0;i<30;i++){particles.push({x:0,y:0,vx:(Math.random()-0.5)*4,vy:(Math.random()-0.5)*4,hue:hue,life:1});} return createEffect(p=>{particles.forEach(part=>{part.x+=part.vx;part.y+=part.vy;part.life-=0.03;});}, p=>{ctx.save();ctx.translate(x,y);particles.forEach(part=>{if(part.life>0){ctx.fillStyle=`hsla(${part.hue},80%,70%,${part.life})`;ctx.beginPath();ctx.arc(part.x,part.y,3,0,Math.PI*2);ctx.fill();}});ctx.restore();},0.8); }
-        function createVacuum(x,y,target) { let particles=[];for(let i=0;i<40;i++)particles.push({x:x+Math.random()*40-20,y:y+Math.random()*40-20,life:1}); return createEffect(p=>{particles.forEach(part=>{part.x+=(target.x-part.x)*0.2;part.y+=(target.y-part.y)*0.2;part.life-=0.05;});}, p=>{particles.forEach(part=>{if(part.life>0){ctx.fillStyle=`rgba(255,255,255,${part.life*0.8})`;ctx.beginPath();ctx.arc(part.x,part.y,part.life*3,0,Math.PI*2);ctx.fill();}});},1.0);}
+        function createPop(x,y,hue) { let particles=[]; for(let i=0; i<30; i++){particles.push({x:0,y:0,vx:(Math.random()-0.5)*4,vy:(Math.random()-0.5)*4,hue:hue,life:1});} return createEffect(p=>{particles.forEach(part=>{part.x+=part.vx;part.y+=part.vy;part.life-=0.03;});}, p=>{ctx.save();ctx.translate(x,y);particles.forEach(part=>{if(part.life>0){ctx.fillStyle=`hsla(${part.hue},80%,70%,${part.life})`;ctx.beginPath();ctx.arc(part.x,part.y,3,0,Math.PI*2);ctx.fill();}});ctx.restore();},0.8); }
+        function createVacuum(x,y,target) { let particles=[];for(let i=0; i<40; i++)particles.push({x:x+Math.random()*40-20,y:y+Math.random()*40-20,life:1}); return createEffect(p=>{particles.forEach(part=>{part.x+=(target.x-part.x)*0.2;part.y+=(target.y-part.y)*0.2;part.life-=0.05;});}, p=>{particles.forEach(part=>{if(part.life>0){ctx.fillStyle=`rgba(255,255,255,${part.life*0.8})`;ctx.beginPath();ctx.arc(part.x,part.y,part.life*3,0,Math.PI*2);ctx.fill();}});},1.0);}
         
         function updateAndDrawSkyElements() {
             sun.x=canvas.width*0.8;sun.y=canvas.height*0.12;sun.radius=Math.min(canvas.width,canvas.height)*0.07;
