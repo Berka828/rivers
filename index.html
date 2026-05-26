@@ -2,19 +2,23 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Gentle Playroom - Core Interaction</title>
+    <title>Gentle Playroom - Full Experience</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; }
         canvas { display: block; position: absolute; top: 0; left: 0; z-index: 1; }
         #webcam { transform: scaleX(-1); display: none; }
-        #ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #ffffff; z-index: 100; color: #333; text-align: center; }
-        button { padding: 20px 50px; font-size: 20px; cursor: pointer; }
+        #ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #ffffff; z-index: 100; color: #333; text-align: center; font-family: sans-serif; }
+        button { padding: 20px 50px; font-size: 20px; cursor: pointer; background-color: #3498db; color: white; border: none; border-radius: 50px; box-shadow: 0 4px 10px rgba(52, 152, 219, 0.3); transition: 0.3s; }
+        button:hover { background-color: #2980b9; transform: scale(1.05); }
+        #log { margin-top: 20px; font-family: monospace; color: #888; }
+        .dg.ac { z-index: 50 !important; }
     </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.9/dat.gui.min.js"></script>
 </head>
 <body>
     <div id="ui">
-        <h1>Core Interaction Test</h1>
-        <p>This version focuses on providing a stable, mirrored view with accurate touchpoints on your hands and feet.</p>
+        <h1 style="letter-spacing: 2px; font-weight: 300;">GENTLE PLAYROOM</h1>
+        <p style="color: #666; margin-bottom: 30px;">A full, robust interactive experience.</p>
         <button onclick="startApp()">START EXPERIENCE</button>
     </div>
 
@@ -26,153 +30,169 @@
         const ctx = canvas.getContext('2d');
         const video = document.getElementById('webcam');
 
-        let lastFrame;
-        let motionPoints = []; // The 4-5 key points (hands, feet, etc.)
+        const backgroundImg = new Image();
+        let backgroundReady = false, imageLoadError = false;
+        backgroundImg.onload = () => { backgroundReady = true; };
+        backgroundImg.onerror = () => { imageLoadError = true; };
+        backgroundImg.src = 'Gemini_Generated_Image_46zqy246zqy246zq.png';
+
+        let lastFrame, engineBooted = false;
+        let motionPoints = [];
+        let allObjects = [];
+        let effects = [];
+        let audioCtx;
+
+        const sun = { x: 0, y: 0, radius: 0, animation: 0 };
+        const rainbow = { active: false, opacity: 0, path: null };
+        let handsUpTimer = 0;
 
         const settings = {
-            motionSensitivity: 45, // How much a pixel must change to be considered "motion"
-            cameraAlpha: 0.2,      // How visible you are
-            indicatorSize: 20,     // Size of the circles on your hands/feet
-            waterLevel: 0.8        // Where the "water" surface is
+            motionSensitivity: 45,
+            balloonCount: 8,
+            lilyPadCount: 10,
+            trashCount: 10,
+            interactiveAnimalCount: 5,
+            floorLevel: 0.7,
+            soundEnabled: true,
+            cameraAlpha: 0.15,
+            cameraBlur: 5,
+            indicatorSize: 25,
         };
 
-        function startApp() {
-            navigator.mediaDevices.getUserMedia({ video: true })
-                .then(stream => {
-                    video.srcObject = stream;
-                    video.play();
-                    const checkInterval = setInterval(() => {
-                        if (video.videoWidth > 0) {
-                            clearInterval(checkInterval);
-                            document.getElementById('ui').style.display = 'none';
-                            resizeCanvas();
-                            window.addEventListener('resize', resizeCanvas);
-                            trackMotion();
-                            gameLoop();
-                        }
-                    }, 100);
-                })
-                .catch(err => {
-                    document.getElementById('ui').innerHTML = `<h1>Error</h1><p>Could not access webcam. Please grant permission and refresh.</p><p><i>${err.name}</i></p>`;
-                });
+        function initAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx.state === 'suspended') audioCtx.resume(); }
+        function playSound(freq, duration = 0.5, type = 'sine', vol = 0.2) {
+            if (!settings.soundEnabled || !audioCtx) return;
+            const osc = audioCtx.createOscillator(), gainNode = audioCtx.createGain();
+            osc.type = type; osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+            gainNode.gain.linearRampToValueAtTime(vol, audioCtx.currentTime + 0.02);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+            osc.connect(gainNode); gainNode.connect(audioCtx.destination);
+            osc.start(); osc.stop(audioCtx.currentTime + duration);
         }
-        
-        function trackMotion() {
-            const mCanvas = document.createElement('canvas');
-            const mCtx = mCanvas.getContext('2d', { willReadFrequently: true });
-            const W = 128, H = 96; // Use a small canvas for faster processing
-            mCanvas.width = W;
-            mCanvas.height = H;
 
+        function startApp() {
+            log.innerText = "Initializing..."; initAudio();
+            navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+                video.srcObject = stream; video.play();
+                const i = setInterval(() => { if (video.videoWidth) { clearInterval(i); engineBooted = true; document.getElementById('ui').style.display = 'none'; initGame(); } }, 100);
+            }).catch(err => { document.getElementById('ui').innerHTML = `<h1>Error</h1><p>Could not access webcam. Please grant permission and refresh.</p>`; });
+        }
+
+        function initGame() {
+            try {
+                const gui = new dat.GUI();
+                const main = gui.addFolder('Gameplay');
+                main.add(settings, 'motionSensitivity', 10, 100).name('Motion Sensitivity');
+                main.add(settings, 'balloonCount', 0, 20).name('Balloons').onFinishChange(resetAllObjects);
+                main.add(settings, 'lilyPadCount', 0, 20).name('Lily Pads').onFinishChange(resetAllObjects);
+                main.add(settings, 'trashCount', 0, 30).name('Trash Items').onFinishChange(resetAllObjects);
+                main.add(settings, 'interactiveAnimalCount', 0, 15).name('Interactive Animals').onFinishChange(resetAllObjects);
+                main.add(settings, 'floorLevel', 0.5, 0.9).name('Water Level');
+                main.add(settings, 'soundEnabled').name('Sound ON/OFF');
+                main.open();
+                const visuals = gui.addFolder('Visuals');
+                visuals.add(settings, 'cameraAlpha', 0, 1).name('Camera Visibility');
+                visuals.add(settings, 'cameraBlur', 0, 20).name('Camera Blur');
+                visuals.add(settings, 'indicatorSize', 5, 50).name('Touch Point Size');
+            } catch (e) {}
+            resizeCanvas(); window.addEventListener('resize', resizeCanvas);
+            resetAllObjects();
+            trackMotion(); gameLoop();
+        }
+
+        function trackMotion() {
+            const mCanvas = document.createElement('canvas'), mCtx = mCanvas.getContext('2d', { willReadFrequently: true });
+            const W = 128, H = 96; mCanvas.width = W; mCanvas.height = H;
             function scan() {
                 try {
-                    if (video.readyState < 3) return; // Make sure video is ready
+                    if (video.readyState < 3) return;
                     mCtx.drawImage(video, 0, 0, W, H);
-                    const currentFrameData = mCtx.getImageData(0, 0, W, H).data;
-
+                    const frameData = mCtx.getImageData(0, 0, W, H).data;
                     if (lastFrame) {
-                        const rawMotion = [];
-                        for (let i = 0; i < currentFrameData.length; i += 4) {
-                            // Compare the red channel of the current frame to the last frame
-                            if (Math.abs(currentFrameData[i] - lastFrame[i]) > settings.motionSensitivity) {
-                                rawMotion.push({
-                                    x: (1 - ((i / 4) % W) / W) * canvas.width,
-                                    y: (Math.floor((i / 4) / W) / H) * canvas.height
-                                });
-                            }
-                        }
-
-                        // If motion was detected, find the most extreme points
-                        if (rawMotion.length > 5) {
-                            let top = rawMotion[0], bottom = rawMotion[0], left = rawMotion[0], right = rawMotion[0];
-                            for (const pt of rawMotion) {
-                                if (pt.y < top.y) top = pt;
-                                if (pt.y > bottom.y) bottom = pt;
-                                if (pt.x < left.x) left = pt;
-                                if (pt.x > right.x) right = pt;
-                            }
-                            // This gives us our specific touchpoints for hands and feet
+                        const raw = [];
+                        for (let i = 0; i < frameData.length; i += 4) { if (Math.abs(frameData[i] - lastFrame[i]) > settings.motionSensitivity) raw.push({ x: (1 - ((i/4)%W)/W)*canvas.width, y: (Math.floor((i/4)/W)/H)*canvas.height }); }
+                        if (raw.length > 4) {
+                            let top=raw[0], bottom=raw[0], left=raw[0], right=raw[0];
+                            for (const p of raw) { if (p.y < top.y) top=p; if (p.y > bottom.y) bottom=p; if (p.x < left.x) left=p; if (p.x > right.x) right=p; }
                             motionPoints = [top, bottom, left, right];
-                        } else {
-                            motionPoints = [];
-                        }
+                            const handsUp = canvas.height * 0.4, handsApart = canvas.width * 0.3;
+                            if (left.y < handsUp && right.y < handsUp && Math.abs(left.x - right.x) > handsApart) { if(++handsUpTimer > 120 && !rainbow.active) { rainbow.active = true; rainbow.opacity = 0; }} 
+                            else { handsUpTimer = 0; }
+                        } else motionPoints = [];
                     }
-                    lastFrame = new Uint8ClampedArray(currentFrameData);
-                } catch (e) {
-                    console.error("Motion tracking failed:", e);
-                } finally {
-                    requestAnimationFrame(scan); // Use requestAnimationFrame for a smoother loop
-                }
+                    lastFrame = new Uint8ClampedArray(frameData);
+                } catch(e) { console.error(e); } finally { requestAnimationFrame(scan); }
             }
             scan();
         }
-
-        function gameLoop() {
-            // Draw a simple background
-            ctx.fillStyle = '#101020'; // Dark blue
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            const waterY = canvas.height * settings.waterLevel;
-            ctx.fillStyle = '#202040'; // Darker water
-            ctx.fillRect(0, waterY, canvas.width, canvas.height - waterY);
-
-            // Draw the mirrored camera feed
-            ctx.save();
-            ctx.globalAlpha = settings.cameraAlpha;
-            ctx.scale(-1, 1);
-            ctx.translate(-canvas.width, 0);
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            ctx.restore();
-
-            // Draw the touchpoint indicators
-            drawTouchIndicators();
-            
-            // Simple ripple interaction for feedback
-            handleRipples(waterY);
-
-            requestAnimationFrame(gameLoop);
-        }
-
-        const ripples = [];
-        function handleRipples(waterY) {
+        
+        function handleInteractions() {
+            if (motionPoints.length === 0) return;
+            const waterY = canvas.height * settings.floorLevel;
             motionPoints.forEach(pt => {
-                if (pt.y > waterY - 30 && Math.random() > 0.8) {
-                    ripples.push({ x: pt.x, y: waterY, radius: 10, life: 1.0 });
-                }
+                if (pt.y > waterY && Math.random() > 0.9) effects.push(createRipple(pt.x, waterY));
+                if (Math.hypot(sun.x - pt.x, sun.y - pt.y) < sun.radius) { if (sun.animation <= 0) { sun.animation = 1.0; playSound(440, 0.8, 'triangle'); }}
+
+                allObjects.forEach(obj => {
+                    if (obj.isTrash && obj.active && Math.hypot(obj.x - pt.x, obj.y - pt.y) < obj.radius + 20) { obj.active = false; effects.push(...createVacuum(obj.x, obj.y, pt)); playSound(100, 0.4, 'sawtooth'); }
+                    else if (obj.type === 'balloon' && obj.active && Math.hypot(obj.x - pt.x, obj.y - pt.y) < obj.radius) { obj.active = false; effects.push(...createPop(obj.x, obj.y, obj.hue)); playSound(550, 0.3, 'triangle'); }
+                    else if (obj.type === 'lilypad' && Math.hypot(obj.x - pt.x, obj.y - pt.y) < obj.radius) { if (Math.random() > 0.8) effects.push(createRipple(obj.x, obj.y)); }
+                    else if (obj.type === 'starfish' && !obj.isAnimating && Math.hypot(obj.x - pt.x, obj.y - pt.y) < obj.radius + 10) { obj.isAnimating = true; playSound(660, 1.0); }
+                    else if (obj.type === 'crab' && !obj.isFleeing && Math.hypot(obj.x - pt.x, obj.y - pt.y) < obj.radius + 20) { obj.isFleeing = true; playSound(220, 0.5); }
+                });
             });
+        }
+        
+        function gameLoop() {
+            requestAnimationFrame(gameLoop);
+            if (backgroundReady) { ctx.drawImage(backgroundImg, 0, 0, canvas.width, canvas.height); } 
+            else { ctx.fillStyle = '#87CEEB'; ctx.fillRect(0, 0, canvas.width, canvas.height); if (imageLoadError) { ctx.fillStyle = 'red'; ctx.font='bold 20px sans-serif'; ctx.textAlign='center'; ctx.fillText("Error: Background image not found.", canvas.width/2, canvas.height/2); }}
+            
+            handleInteractions();
+            
+            allObjects.forEach(obj => obj.update());
+            allObjects = allObjects.filter(obj => !obj.remove);
+            while (allObjects.filter(o => o.isTrash).length < settings.trashCount) allObjects.push(createTrash());
+            
+            effects.forEach(eff => eff.update());
+            effects = effects.filter(eff => eff.life > 0);
 
-            for (let i = ripples.length - 1; i >= 0; i--) {
-                const r = ripples[i];
-                r.radius += 1.5;
-                r.life -= 0.02;
-                if (r.life <= 0) {
-                    ripples.splice(i, 1);
-                } else {
-                    ctx.strokeStyle = `rgba(200, 220, 255, ${r.life * 0.5})`;
-                    ctx.lineWidth = 2;
-                    ctx.beginPath();
-                    ctx.ellipse(r.x, r.y, r.radius, r.radius * 0.4, 0, 0, Math.PI * 2);
-                    ctx.stroke();
-                }
-            }
+            allObjects.forEach(obj => obj.draw());
+            effects.forEach(eff => eff.draw());
+            
+            updateAndDrawSkyElements();
+            drawMirroredCamera();
+            drawTouchIndicators();
+        }
+        
+        function resetAllObjects() { allObjects = []; for (let i=0; i<settings.balloonCount; i++) allObjects.push(createBalloon()); for (let i=0; i<settings.lilyPadCount; i++) allObjects.push(createLilyPad()); for (let i=0; i<settings.trashCount; i++) allObjects.push(createTrash()); for (let i=0; i<settings.interactiveAnimalCount; i++) allObjects.push(createInteractiveAnimal()); }
+        
+        const baseObject = { update: function() { this.x += this.vx; this.y += this.vy; this.phase += 0.02; if(this.y < -this.radius || this.y > canvas.height + this.radius) this.remove = true; } };
+        function createBalloon() { const size=Math.random()*20+25; return { ...baseObject, type: 'balloon', x: Math.random()*canvas.width, y: canvas.height+size, radius: size, vx: (Math.random()-0.5)*0.5, vy: -Math.random()*0.8-0.2, hue: Math.random()*360, active: true, update: function() { if(this.active){ this.y += this.vy; this.x += this.vx; } else { this.radius *= 0.85; if(this.radius < 1) this.remove=true; } if(this.y < -this.radius) this.remove=true; }, draw: function(){ ctx.save(); ctx.translate(this.x, this.y); ctx.fillStyle=`hsla(${this.hue},80%,70%,0.8)`; ctx.strokeStyle=`hsla(${this.hue},80%,50%,0.9)`; ctx.lineWidth=2; ctx.beginPath(); ctx.ellipse(0,0,this.radius*0.8,this.radius,0,0,Math.PI*2); ctx.fill(); ctx.stroke(); ctx.restore(); } }; }
+        function createLilyPad() { const size=Math.random()*25+20; return { type: 'lilypad', x: Math.random()*canvas.width, y: canvas.height*settings.floorLevel+Math.random()*20-10, radius: size, update: function(){}, draw: function(){ ctx.fillStyle='#2E8B57'; ctx.strokeStyle='#006400'; ctx.lineWidth=2; ctx.beginPath(); ctx.ellipse(this.x, this.y, this.radius, this.radius*0.7, 0, 0.3, Math.PI*2-0.3); ctx.closePath(); ctx.fill(); ctx.stroke(); } }; }
+        function createTrash() { const waterY=canvas.height*settings.floorLevel; const size=Math.random()*15+20; return { ...baseObject, isTrash: true, type: ['bottle','can','bag'][Math.floor(Math.random()*3)], x: Math.random()*canvas.width, y: waterY+Math.random()*(canvas.height-waterY), radius: size, vx: (Math.random()-0.5)*0.3, vy: 0, phase: Math.random()*Math.PI*2, rotation: Math.random()*Math.PI*2, active: true, scale: 1, update: function() { if (this.active) { this.x+=this.vx; this.y+=Math.sin(this.phase)*0.1; this.phase+=0.02; } else { this.scale=Math.max(0,this.scale-0.05); if(this.scale==0)this.remove=true; } if(this.x > canvas.width+50)this.x=-40; if(this.x<-50)this.x=canvas.width+40; }, draw: function() { ctx.save(); ctx.translate(this.x,this.y); ctx.rotate(this.rotation); ctx.scale(this.scale,this.scale); ctx.globalAlpha=0.7; ctx.lineWidth=2; switch(this.type){ case 'bottle': ctx.fillStyle='#B2DFDB';ctx.strokeStyle='#4DB6AC';ctx.fillRect(-this.radius*0.4,-this.radius,this.radius*0.8,this.radius*2);ctx.strokeRect(-this.radius*0.4,-this.radius,this.radius*0.8,this.radius*2);break; case 'can': ctx.fillStyle='#BDBDBD';ctx.strokeStyle='#757575';ctx.beginPath();ctx.ellipse(0,0,this.radius*0.6,this.radius,0,0,Math.PI*2);ctx.fill();ctx.stroke();break; case 'bag': ctx.fillStyle='#E0E0E0';ctx.strokeStyle='#9E9E9E';ctx.beginPath();ctx.moveTo(-this.radius,-this.radius);ctx.quadraticCurveTo(0,0,this.radius,-this.radius);ctx.quadraticCurveTo(this.radius*0.2,this.radius*1.2,-this.radius,-this.radius);ctx.fill();ctx.stroke();break; } ctx.restore(); } }; }
+        function createInteractiveAnimal() { const waterY = canvas.height*settings.floorLevel; const type = Math.random()>0.5?'starfish':'crab'; const size=Math.random()*15+15; let animal = { type: type, x:Math.random()*canvas.width, y: waterY+Math.random()*(canvas.height-waterY-30)+15, radius:size, isAnimating:false, isFleeing:false, update:function(){ if(this.type==='crab'){if(this.isFleeing){this.x+=this.vx*3; if(this.x<-50||this.x>canvas.width+50)this.remove=true;}else{this.x+=this.vx; if(this.x<0||this.x>canvas.width)this.vx*=-1;}} else if(this.type==='starfish'&&this.isAnimating){this.animProgress+=0.05; if(this.animProgress>=1){this.isAnimating=false;this.animProgress=0;}} }, draw: function(){ ctx.save();ctx.translate(this.x,this.y); if(this.type==='starfish')drawStarfish(this); else if(this.type==='crab')drawCrab(this); ctx.restore(); }}; if(type==='starfish'){animal.y=canvas.height-size;animal.animProgress=0;}else{animal.vx=(Math.random()>0.5?1:-1)*0.5;} return animal; }
+        function drawStarfish(a){ctx.fillStyle='#FFC0CB';ctx.strokeStyle='#FF69B4';ctx.lineWidth=3;if(a.isAnimating){ctx.rotate(Math.sin(a.animProgress*Math.PI)*0.5);const glow=ctx.createRadialGradient(0,0,0,0,0,a.radius*2);glow.addColorStop(0,'rgba(255,255,100,0.8)');glow.addColorStop(1,'rgba(255,255,100,0)');ctx.fillStyle=glow;ctx.beginPath();ctx.arc(0,0,a.radius*2,0,Math.PI*2);ctx.fill();}ctx.beginPath();for(let i=0;i<5;i++){let rot=i*Math.PI*0.4;ctx.lineTo(Math.cos(rot)*a.radius,Math.sin(rot)*a.radius);rot+=Math.PI*0.2;ctx.lineTo(Math.cos(rot)*a.radius*0.4,Math.sin(rot)*a.radius*0.4);}ctx.closePath();ctx.fillStyle='#FFC0CB';ctx.fill();ctx.stroke();}
+        function drawCrab(a){ctx.fillStyle='#FF4500';ctx.strokeStyle='#8B0000';ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(0,0,a.radius,a.radius*0.7,0,0,Math.PI*2);ctx.fill();ctx.stroke();for(let i=0;i<6;i++){let side=i<3?-1:1;let angle=(i%3)*0.5+0.3;ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(side*a.radius*0.8,(angle-0.8)*a.radius);ctx.stroke();}}
+        
+        function createEffect(updater, drawer, life=1.0) { return { life: life, update: function() { this.life -= 0.02; updater(this); }, draw: function() { drawer(this); } }; }
+        function createRipple(x,y) { return createEffect(r => r.radius += 1.5, r => { ctx.strokeStyle=`hsla(195,80%,90%,${r.life*0.7})`; ctx.lineWidth=3; ctx.beginPath(); ctx.ellipse(r.x,r.y,r.radius,r.radius*0.4,0,0,2*Math.PI); ctx.stroke(); }); }
+        function createPop(x,y,hue) { let particles=[]; for(let i=0;i<30;i++){particles.push({x:0,y:0,vx:(Math.random()-0.5)*4,vy:(Math.random()-0.5)*4,hue:hue,life:1});} return createEffect(p=>{particles.forEach(part=>{part.x+=part.vx;part.y+=part.vy;part.life-=0.03;});}, p=>{ctx.save();ctx.translate(x,y);particles.forEach(part=>{if(part.life>0){ctx.fillStyle=`hsla(${part.hue},80%,70%,${part.life})`;ctx.beginPath();ctx.arc(part.x,part.y,3,0,Math.PI*2);ctx.fill();}});ctx.restore();},0.8); }
+        function createVacuum(x,y,target) { let particles=[];for(let i=0;i<40;i++)particles.push({x:x+Math.random()*40-20,y:y+Math.random()*40-20,life:1}); return createEffect(p=>{particles.forEach(part=>{part.x+=(target.x-part.x)*0.2;part.y+=(target.y-part.y)*0.2;part.life-=0.05;});}, p=>{particles.forEach(part=>{if(part.life>0){ctx.fillStyle=`rgba(255,255,255,${part.life*0.8})`;ctx.beginPath();ctx.arc(part.x,part.y,part.life*3,0,Math.PI*2);ctx.fill();}});},1.0);}
+        
+        function updateAndDrawSkyElements() {
+            sun.x=canvas.width*0.8;sun.y=canvas.height*0.12;sun.radius=Math.min(canvas.width,canvas.height)*0.07;
+            if(sun.animation>0)sun.animation-=0.05;
+            if(rainbow.active){if(rainbow.opacity<1)rainbow.opacity+=0.01;}else if(rainbow.opacity>0)rainbow.opacity-=0.01;
+            if(rainbow.opacity>0){const waterY=canvas.height*settings.floorLevel;if(!rainbow.path) {rainbow.path=new Path2D();let r=Math.min(canvas.width*0.7,canvas.height*1.2);rainbow.path.arc(canvas.width/2,waterY+r*0.2,r,Math.PI*1.1,Math.PI*1.9);}const colors=['#FF0000','#FF7F00','#FFFF00','#00FF00','#0000FF','#4B0082','#9400D3'];ctx.save();ctx.globalAlpha=rainbow.opacity*0.6;ctx.lineWidth=25;ctx.lineCap='round';for(let i=0;i<colors.length;i++){ctx.strokeStyle=colors[i];ctx.stroke(rainbow.path);ctx.lineWidth-=3;}ctx.restore();}
+            if(rainbow.active&&handsUpTimer===0)rainbow.active=false;
+            if (sun.animation>0){ctx.save();ctx.translate(sun.x,sun.y);const rayLength=sun.radius*2.5,rayStart=sun.radius*1.1,rayOpacity=sun.animation*0.8;ctx.strokeStyle=`rgba(255,255,100,${rayOpacity})`;ctx.lineWidth=12*sun.animation+4;for(let i=0;i<8;i++){let angle=i/8*Math.PI*2;ctx.rotate(angle);ctx.beginPath();ctx.moveTo(rayStart,0);ctx.lineTo(rayLength,0);ctx.stroke();ctx.rotate(-angle);}ctx.restore();}
         }
 
-        function drawTouchIndicators() {
-            for (const pt of motionPoints) {
-                const grad = ctx.createRadialGradient(pt.x, pt.y, 0, pt.x, pt.y, settings.indicatorSize * 1.5);
-                grad.addColorStop(0, 'rgba(255, 255, 255, 0.7)');
-                grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
-                ctx.fillStyle = grad;
-                ctx.beginPath();
-                ctx.arc(pt.x, pt.y, settings.indicatorSize * 1.5, 0, Math.PI * 2);
-                ctx.fill();
-            }
-        }
-
-        function resizeCanvas() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-        }
-
+        function drawMirroredCamera() { ctx.save(); ctx.globalAlpha = settings.cameraAlpha; ctx.filter=`blur(${settings.cameraBlur}px)`; ctx.scale(-1,1); ctx.translate(-canvas.width,0); if(video.readyState>=3)ctx.drawImage(video,0,0,canvas.width,canvas.height); ctx.restore(); }
+        function drawTouchIndicators() { motionPoints.forEach(pt=>{const grad=ctx.createRadialGradient(pt.x,pt.y,0,pt.x,pt.y,settings.indicatorSize*1.5);grad.addColorStop(0,'rgba(255,255,255,0.7)');grad.addColorStop(1,'rgba(255,255,255,0)');ctx.fillStyle=grad;ctx.beginPath();ctx.arc(pt.x,pt.y,settings.indicatorSize,0,Math.PI*2);ctx.fill();}); }
+        function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; rainbow.path = null; }
     </script>
 </body>
 </html>
