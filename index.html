@@ -44,6 +44,14 @@
         var canvas = document.getElementById('gameCanvas');
         var ctx = canvas.getContext('2d');
 
+        // --- NEW: Background Image ---
+        var backgroundImg = new Image();
+        var backgroundReady = false;
+        backgroundImg.onload = function() {
+            backgroundReady = true;
+        };
+        backgroundImg.src = 'image_1779772276920845.png'; // Make sure the image file is in the same folder
+
         var objects = [], motionPoints = [], popExplosions = [], ripples = [], splashes = []; 
         var lastFrame = null, engineBooted = false;
         var activeInteractionMode = 'Launch'; 
@@ -61,27 +69,20 @@
 
         var bxcmHues = [280, 30, 190, 90, 330];
 
-        var handsUpTimer = 0;
-        var rainbow = { active: false, opacity: 0, path: null };
-
         var settings = {
             interactionMode: 'Random', 
             objectCount: 15, 
-            floorLevel: 0.95,       
+            floorLevel: 0.6, // Adjusted to match water level in the background
             magicFillSpeed: 1.0,    
             soundEnabled: true,     
             gravity: 0.2, 
             kickPower: 8,
-            bgColor: '#f9f9fb', 
             cameraAlpha: 0.2, 
             cameraBlur: 4,
             indicatorColor: '#ffffff', 
             indicatorSize: 30,
             puddleSize: 120,
-            sunAnimationSpeed: 0.05,
-            sunRayCount: 8,
-            // --- NEW: Magic Meter toggle ---
-            showMagicMeter: true 
+            showMagicMeter: true
         };
 
         function initAudio() {
@@ -126,7 +127,7 @@
 
         function createSonicRing(startRadius = 10) {
             sonicRings.push({
-                x: canvas.width / 2, y: canvas.height / 2,
+                x: canvas.width / 2, y: canvas.height * (settings.floorLevel + 0.2), // Start rings on the water
                 radius: startRadius,
                 color: `hsl(${Math.random() * 360}, 60%, 75%)`,
                 thickness: Math.random() * 15 + 10,
@@ -158,7 +159,7 @@
                 var mainFolder = gui.addFolder('Main Gameplay');
                 mainFolder.add(settings, 'interactionMode', ['Launch', 'Pop', 'Random']).name('Ball Mode');
                 mainFolder.add(settings, 'objectCount', 5, 40).name('Total Objects').onFinishChange(resetObjects);
-                mainFolder.add(settings, 'floorLevel', 0.5, 1.0).name('Floor Height');
+                mainFolder.add(settings, 'floorLevel', 0.5, 1.0).name('Water Level');
                 mainFolder.add(settings, 'soundEnabled').name('Sound ON/OFF');
                 mainFolder.open();
 
@@ -166,15 +167,10 @@
                 magicFolder.add(settings, 'magicFillSpeed', 0.1, 5.0).name('Fill Speed');
                 magicFolder.add(settings, 'gravity', 0.05, 0.5).name('Gravity');
                 magicFolder.add(settings, 'kickPower', 2, 20).name('Impact Force');
-                // --- NEW: Add toggle for thermometer ---
                 magicFolder.add(settings, 'showMagicMeter').name('Show Meter');
                 
                 var envFolder = gui.addFolder('Environment');
-                envFolder.addColor(settings, 'bgColor').name('Room Hue');
-                envFolder.add(settings, 'puddleSize', 50, 300).name('Puddle Base Size');
-                envFolder.add(settings, 'sunAnimationSpeed', 0.01, 0.2).name('Sun Animation');
-                envFolder.add(settings, 'sunRayCount', 4, 16).name('Sun Rays').step(1);
-
+                envFolder.add(settings, 'puddleSize', 50, 300).name('Ripple Base Size');
 
                 var mirrorFolder = gui.addFolder('Camera Mirror');
                 mirrorFolder.add(settings, 'cameraAlpha', 0, 1).name('Visibility');
@@ -236,29 +232,12 @@
                     }
                     
                     if (rawMotion.length > 0) {
-                        let topPt = rawMotion[0], bottomPt = rawMotion[0];
-                        let leftPt = rawMotion[0], rightPt = rawMotion[0];
-                        
+                        let topPt = rawMotion[0], bottomPt = rawMotion[0], leftPt = rawMotion[0], rightPt = rawMotion[0];
                         rawMotion.forEach(p => {
-                            if (p.y < topPt.y) topPt = p;       
-                            if (p.y > bottomPt.y) bottomPt = p; 
-                            if (p.x < leftPt.x) leftPt = p;     
-                            if (p.x > rightPt.x) rightPt = p;   
+                            if (p.y < topPt.y) topPt = p; if (p.y > bottomPt.y) bottomPt = p; 
+                            if (p.x < leftPt.x) leftPt = p; if (p.x > rightPt.x) rightPt = p;   
                         });
-                        
                         motionPoints.push(topPt, bottomPt, leftPt, rightPt);
-
-                        const handsUpThreshold = canvas.height * 0.4;
-                        const handsApartThreshold = canvas.width * 0.3;
-                        if (leftPt.y < handsUpThreshold && rightPt.y < handsUpThreshold && Math.abs(leftPt.x - rightPt.x) > handsApartThreshold) {
-                            handsUpTimer++;
-                            if (handsUpTimer >= 240 && !rainbow.active) { 
-                                rainbow.active = true;
-                                rainbow.opacity = 0;
-                            }
-                        } else {
-                            handsUpTimer = 0;
-                        }
 
                         motionPoints.forEach(pt => {
                             objects.forEach((obj, index) => {
@@ -294,12 +273,6 @@
                                                 obj.cooldown = 30; 
                                             }
                                             break;
-                                        case 'sun':
-                                            if(obj.animation < 1.0) {
-                                                obj.animation = 1.0;
-                                                playChime();
-                                            }
-                                            break;
                                     }
                                 }
                             });
@@ -323,8 +296,14 @@
                  showModeChangeNotification(activeInteractionMode);
             }
 
-            ctx.fillStyle = settings.bgColor;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // --- NEW: Draw the background image ---
+            if (backgroundReady) {
+                ctx.drawImage(backgroundImg, 0, 0, canvas.width, canvas.height);
+            } else {
+                ctx.fillStyle = '#1c274c'; // Fallback color
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+
 
             drawMirroredCamera();
 
@@ -336,12 +315,8 @@
                 ctx.restore();
             }
 
-            drawAndUpdateRainbow();
             drawTouchIndicators();
-            // --- NEW: Conditionally draw the thermometer ---
-            if (settings.showMagicMeter) {
-                drawMagicMeter(); 
-            }
+            if (settings.showMagicMeter) drawMagicMeter(); 
             drawAndUpdateObjects(); 
             drawAndUpdatePops();
             drawAndUpdateSplashes(); 
@@ -389,37 +364,20 @@
             var fillY = y + barHeight - fillHeight;
 
             var grad = ctx.createLinearGradient(x, y + barHeight, x, y);
-            grad.addColorStop(0, '#ff4444');    
-            grad.addColorStop(0.5, '#ffeb3b');  
-            grad.addColorStop(1, '#00C851');    
+            grad.addColorStop(0, '#ff4444'); grad.addColorStop(0.5, '#ffeb3b'); grad.addColorStop(1, '#00C851');    
 
-            ctx.save();
-            ctx.fillStyle = grad;
-            ctx.fillRect(x, fillY, barWidth, fillHeight);
-            ctx.restore();
-
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-            ctx.lineWidth = 4;
-            ctx.strokeRect(x, y, barWidth, barHeight);
+            ctx.save(); ctx.fillStyle = grad; ctx.fillRect(x, fillY, barWidth, fillHeight); ctx.restore();
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)'; ctx.lineWidth = 4; ctx.strokeRect(x, y, barWidth, barHeight);
         }
 
         function drawAndUpdateSonicRings() {
             for (let i = sonicRings.length - 1; i >= 0; i--) {
                 let r = sonicRings[i];
-                r.radius += 3;
-                r.life -= 0.005;
-                
-                if (r.life <= 0) {
-                    sonicRings.splice(i, 1);
-                } else {
-                    ctx.save();
-                    ctx.globalAlpha = r.life * 0.5;
-                    ctx.strokeStyle = r.color;
-                    ctx.lineWidth = r.thickness;
-                    ctx.beginPath();
-                    ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
-                    ctx.stroke();
-                    ctx.restore();
+                r.radius += 3; r.life -= 0.005;
+                if (r.life <= 0) sonicRings.splice(i, 1);
+                else {
+                    ctx.save(); ctx.globalAlpha = r.life * 0.5; ctx.strokeStyle = r.color; ctx.lineWidth = r.thickness;
+                    ctx.beginPath(); ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
                 }
             }
         }
@@ -429,16 +387,12 @@
                 let c = confetti[i];
                 c.x += c.vx; c.y += c.vy; c.rotation += c.rs;
                 
-                if (c.opacity < 1.0 && magicEventTimer > 60) {
-                    c.opacity += 0.05;
-                }
-                if (magicEventTimer <= 60) {
-                    c.opacity = Math.max(0, magicEventTimer / 60);
-                }
+                if (c.opacity < 1.0 && magicEventTimer > 60) c.opacity += 0.05;
+                if (magicEventTimer <= 60) c.opacity = Math.max(0, magicEventTimer / 60);
 
                 ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.rotation);
-                ctx.globalAlpha = c.opacity; 
-                ctx.fillStyle = c.color; ctx.fillRect(-c.size/2, -c.size/2, c.size, c.size * 0.6); ctx.restore();
+                ctx.globalAlpha = c.opacity; ctx.fillStyle = c.color; 
+                ctx.fillRect(-c.size/2, -c.size/2, c.size, c.size * 0.6); ctx.restore();
                 if (c.x < 0) c.x = canvas.width; if (c.x > canvas.width) c.x = 0;
             }
         }
@@ -452,7 +406,6 @@
                     case 'ball': updateBall(obj, floorY); break;
                     case 'leaf': updateLeaf(obj, floorY); break;
                     case 'puddle': updatePuddle(obj, floorY); break;
-                    case 'sun': updateSun(obj); break;
                 }
 
                 ctx.save();
@@ -460,13 +413,10 @@
                     case 'ball': drawBall(obj, floorY); break;
                     case 'leaf': drawLeaf(obj, floorY); break;
                     case 'puddle': drawPuddle(obj, floorY); break;
-                    case 'sun': drawSun(obj); break;
                 }
                 ctx.restore();
 
-                if (obj.y > canvas.height + 50) {
-                    objects[i] = createObject();
-                }
+                if (obj.y > canvas.height + 50) objects[i] = createObject();
             });
         }
         
@@ -497,88 +447,7 @@
             let fillStyle = o.isColorful ? `hsla(${o.colorHue}, 80%, 60%, 0.4)` : 'rgba(100, 180, 255, 0.3)';
             ctx.fillStyle = fillStyle; ctx.beginPath(); ctx.ellipse(o.x, o.y, o.radius, o.radius * 0.3, 0, 0, 2 * Math.PI); ctx.fill();
         }
-
-        function updateSun(o) {
-            if(o.animation > 0) {
-                o.animation -= settings.sunAnimationSpeed;
-            } else {
-                o.animation = 0;
-            }
-            o.y = o.baseY + Math.sin(Date.now() * 0.0005) * 5;
-        }
-
-        function drawSun(o) {
-            ctx.translate(o.x, o.y);
-
-            var rayLength = o.radius * 1.5 + (o.radius * 1.0 * o.animation);
-            var rayStart = o.radius * 1.2;
-            var rayOpacity = 0.4 + o.animation * 0.6;
-
-            ctx.save();
-            ctx.strokeStyle = `rgba(255, 220, 100, ${rayOpacity})`;
-            ctx.lineWidth = 10 * o.animation + 4;
-
-            for(let i = 0; i < settings.sunRayCount; i++) {
-                let angle = (i / settings.sunRayCount) * Math.PI * 2;
-                ctx.rotate(angle);
-                ctx.beginPath();
-                ctx.moveTo(rayStart, 0);
-                ctx.lineTo(rayLength, 0);
-                ctx.stroke();
-                ctx.rotate(-angle);
-            }
-            ctx.restore();
-
-            var grad = ctx.createRadialGradient(0, 0, 0, 0, 0, o.radius);
-            grad.addColorStop(0, 'rgba(255, 255, 220, 1)');
-            grad.addColorStop(0.8, 'rgba(255, 200, 80, 1)');
-            grad.addColorStop(1, 'rgba(255, 180, 50, 0)');
-            
-            ctx.fillStyle = grad;
-            ctx.beginPath();
-            ctx.arc(0, 0, o.radius, 0, 2 * Math.PI);
-            ctx.fill();
-        }
-
-        function drawAndUpdateRainbow() {
-            if (rainbow.active) {
-                if (rainbow.opacity < 1.0) {
-                    rainbow.opacity = Math.min(1.0, rainbow.opacity + 0.01);
-                }
-            } else {
-                if (rainbow.opacity > 0) {
-                    rainbow.opacity = Math.max(0, rainbow.opacity - 0.01);
-                } else {
-                    return;
-                }
-            }
-            
-            if (!rainbow.path) {
-                rainbow.path = new Path2D();
-                let centerX = canvas.width / 2;
-                let startY = canvas.height * 1.1;
-                let radius = Math.min(canvas.width, canvas.height) * 0.6;
-                rainbow.path.arc(centerX, startY, radius, Math.PI * 1.15, Math.PI * 1.85);
-            }
-
-            const colors = ['#FF0000', '#FF7F00', '#FFFF00', '#00FF00', '#0000FF', '#4B0082', '#9400D3'];
-            ctx.save();
-            ctx.globalAlpha = rainbow.opacity * 0.7;
-            ctx.lineWidth = 15;
-            ctx.lineCap = 'round';
-
-            for (let i = 0; i < colors.length; i++) {
-                ctx.strokeStyle = colors[i];
-                ctx.stroke(rainbow.path);
-                ctx.lineWidth -= 2;
-            }
-            ctx.restore();
-            
-            if (rainbow.active && handsUpTimer === 0) {
-                rainbow.active = false;
-            }
-        }
-
+        
         function drawAndUpdateRipples() {
             for (let i = ripples.length - 1; i >= 0; i--) {
                 let r = ripples[i]; r.radius += 2.0; r.life -= 0.02;
@@ -605,14 +474,6 @@
 
         function resetObjects() {
             objects = [];
-            objects.push({
-                type: 'sun',
-                x: canvas.width / 2,
-                y: 120,
-                baseY: 120,
-                radius: 60,
-                animation: 0,
-            });
             for (var i = 0; i < settings.objectCount; i++) objects.push(createObject());
         }
 
@@ -685,11 +546,7 @@
             }
         }
         
-        function resizeCanvas() { 
-            canvas.width = window.innerWidth; 
-            canvas.height = window.innerHeight;
-            if(rainbow) rainbow.path = null;
-        }
+        function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
         
         document.addEventListener('keydown', e => { 
             if (e.key.toLowerCase() === 'f') {
